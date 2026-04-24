@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="WhatsApp Clone - Real-time messaging application">
+    <title>WhatsApp Clone</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- AUTH SCREEN -->
+    <div id="auth-screen" class="screen active">
+        <div class="auth-container">
+            <div class="auth-header">
+                <div class="auth-logo">
+                    <svg viewBox="0 0 39 39" width="39" height="39"><path fill="#00e676" d="M10.7 32.8l.6.3c2.5 1.5 5.3 2.2 8.1 2.2 8.8 0 16-7.2 16-16 0-4.2-1.7-8.3-4.7-11.3s-7-4.7-11.3-4.7c-8.8 0-16 7.2-15.9 16.1 0 3 .9 5.9 2.4 8.4l.4.6-1.6 5.9 6-1.5z"></path><path fill="#fff" d="M32.4 6.4C29 2.9 24.3 1 19.5 1 9.3 1 1.1 9.3 1.2 19.4c0 3.2.9 6.3 2.4 9.1L1 38l9.7-2.5c2.7 1.5 5.7 2.2 8.7 2.2 10.1 0 18.3-8.3 18.3-18.4 0-4.9-1.9-9.5-5.3-12.9zM19.5 34.6c-2.7 0-5.4-.7-7.7-2.1l-.6-.3-5.8 1.5L6.9 28l-.4-.6c-4.4-7.1-2.3-16.5 4.9-20.9s16.5-2.3 20.9 4.9 2.3 16.5-4.9 20.9c-2.3 1.5-5.1 2.3-7.9 2.3zm8.8-11.1l-1.1-.5s-1.6-.7-2.6-1.2c-.1 0-.2-.1-.3-.1-.3 0-.5.1-.7.2 0 0-.1.1-1.5 1.7-.1.2-.3.3-.5.3h-.1c-.1 0-.3-.1-.4-.2l-.5-.2c-1.1-.5-2.1-1.1-2.9-1.9-.2-.2-.5-.4-.7-.6-.7-.7-1.4-1.5-1.9-2.4l-.1-.2c-.1-.1-.1-.2-.2-.4 0-.2 0-.4.1-.5 0 0 .4-.5.7-.8.2-.2.3-.5.5-.7.2-.3.3-.7.2-1-.1-.5-1.3-3.2-1.6-3.8-.2-.3-.4-.4-.7-.5h-1.1c-.2 0-.4.1-.6.1l-.1.1c-.2.1-.4.3-.6.4-.2.2-.3.4-.5.6-.7.9-1.1 2-1.1 3.1 0 .8.2 1.6.5 2.3l.1.3c.9 1.9 2.1 3.6 3.7 5.1l.4.4c.3.3.6.5.8.8 2.1 1.8 4.5 3.1 7.2 3.6.3.1.7.1 1 .1h1c.5 0 1.1-.2 1.5-.4.3-.2.5-.2.7-.4l.2-.2c.2-.2.4-.3.6-.5s.3-.4.5-.6c.2-.4.3-.9.4-1.4v-.7s-.1-.1-.3-.2z"></path></svg>
+                </div>
+                <h1 id="auth-title">WhatsApp Clone</h1>
+                <p id="auth-subtitle">Sign in to continue to your messages</p>
+            </div>
+            <form id="login-form" class="auth-form active">
+                <div class="form-group"><label for="login-email">Email</label><input type="email" id="login-email" placeholder="Enter your email" required></div>
+                <div class="form-group"><label for="login-password">Password</label><input type="password" id="login-password" placeholder="Enter your password" required></div>
+                <button type="submit" id="login-btn" class="btn btn-primary">Sign In</button>
+                <p class="auth-switch">Don't have an account? <a href="#" id="show-register">Sign up</a></p>
+            </form>
+            <form id="register-form" class="auth-form">
+                <div class="form-group"><label for="register-username">Username</label><input type="text" id="register-username" placeholder="Choose a username" required></div>
+                <div class="form-group"><label for="register-email">Email</label><input type="email" id="register-email" placeholder="Enter your email" required></div>
+                <div class="form-group"><label for="register-password">Password</label><input type="password" id="register-password" placeholder="Create a password (min 6 chars)" required></div>
+                <button type="submit" id="register-btn" class="btn btn-primary">Create Account</button>
+                <p class="auth-switch">Already have an account? <a href="#" id="show-login">Sign in</a></p>
+            </form>
+            <div id="auth-error" class="error-message"></div>
+        </div>
+    </div>
+
+    <!-- CHAT SCREEN -->
+    <div id="chat-screen" class="screen">
+        <div class="app-container">
+            <!-- Sidebar -->
+            <aside id="sidebar" class="sidebar">
+                <header class="sidebar-header">
+                    <div class="user-info" id="open-profile-btn" style="cursor:pointer;" title="Edit profile">
+                        <div class="avatar avatar-sm" id="my-avatar"><span id="my-avatar-letter"></span></div>
+                        <span class="header-username" id="my-username"></span>
+                    </div>
+                    <div class="header-actions">
+                        <button class="icon-btn" id="new-chat-btn" title="New Chat"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19.005 3.175H4.674C3.642 3.175 3 3.789 3 4.821V21.02l3.544-3.514h12.461c1.033 0 2.064-1.06 2.064-2.093V4.821c-.001-1.032-1.032-1.646-2.064-1.646zm-4.989 9.869H7.041V11.1h6.975v1.944zm3-4H7.041V7.1h9.975v1.944z"></path></svg></button>
+                        <button class="icon-btn" id="logout-btn" title="Logout"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M16 13v-2H7V8l-5 4 5 4v-3z"/><path fill="currentColor" d="M20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z"/></svg></button>
+                    </div>
+                </header>
+                <div class="search-container"><div class="search-box"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="#8696a0" d="M15.009 13.805h-.636l-.22-.219a5.184 5.184 0 0 0 1.256-3.386 5.207 5.207 0 1 0-5.207 5.208 5.183 5.183 0 0 0 3.385-1.255l.221.22v.635l4.004 3.999 1.194-1.195-3.997-4.007zm-4.808 0a3.605 3.605 0 1 1 0-7.21 3.605 3.605 0 0 1 0 7.21z"></path></svg><input type="text" id="search-input" placeholder="Search or start new chat"></div></div>
+                <div id="chat-list" class="chat-list"></div>
+                <!-- Contacts Panel -->
+                <div id="contacts-panel" class="contacts-panel">
+                    <header class="contacts-header"><button class="icon-btn" id="close-contacts"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg></button><h2>New Chat</h2></header>
+                    <div id="contacts-list" class="contacts-list"></div>
+                </div>
+                <!-- Profile Panel -->
+                <div id="profile-panel" class="profile-panel">
+                    <header class="profile-panel-header"><button class="icon-btn" id="close-profile"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path></svg></button><h2>Profile</h2></header>
+                    <div class="profile-panel-body">
+                        <div class="profile-avatar-section">
+                            <div class="profile-avatar" id="profile-avatar-display"><span id="profile-avatar-letter"></span><div class="profile-avatar-overlay" id="avatar-upload-trigger"><svg viewBox="0 0 24 24" width="28" height="28"><path fill="#fff" d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"/><path fill="#fff" d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h4.05l1.83-2h4.24l1.83 2H20v12z"/></svg><span>CHANGE<br>PROFILE PHOTO</span></div></div>
+                            <input type="file" id="avatar-file-input" accept="image/*" hidden>
+                            <button class="remove-avatar-btn" id="remove-avatar-btn" style="display:none;">Remove Photo</button>
+                        </div>
+                        <div class="profile-field"><label>Your name</label><div class="profile-field-row"><input type="text" id="profile-name-input" maxlength="50"><button class="icon-btn profile-edit-btn" id="save-name-btn" title="Save"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg></button></div><p class="profile-field-hint">This name will be visible to your contacts.</p></div>
+                        <div class="profile-field"><label>About</label><div class="profile-field-row"><input type="text" id="profile-about-input" maxlength="139"><button class="icon-btn profile-edit-btn" id="save-about-btn" title="Save"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg></button></div></div>
+                        <div class="profile-field"><label>Email</label><div class="profile-field-row"><input type="text" id="profile-email-display" readonly disabled></div></div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Chat Area -->
+            <main id="chat-area" class="chat-area">
+                <div id="default-chat-view" class="default-view">
+                    <div class="default-content">
+                        <svg viewBox="0 0 303 172" width="250"><path fill="#364147" d="M229.565 160.229c32.647-16.166 51.419-50.663 48.986-90.015C276.353 30.716 242.792.669 202.39.669c-10.092 0-19.846 2.063-28.884 6.12-17.939 8.066-30.116 22.946-37.14 40.588-7.2-3.718-15.243-5.87-23.79-5.87-28.893 0-52.348 23.456-52.348 52.349 0 12.488 4.378 23.956 11.673 32.952H29.59c-3.357 0-6.696.318-9.95.95-19.569 3.797-33.553 21.169-33.553 41.591h255.98c-.007-2.992-.382-5.992-1.128-8.97-.217-.862-.469-1.715-.75-2.555-.666-1.973-1.483-3.856-2.444-5.651-.069-.129-.126-.261-.19-.388z"></path><path fill="#2a3942" d="M201.463 108.524h-101.1a10.016 10.016 0 0 0-10.015 10.016v.063a10.016 10.016 0 0 0 10.016 10.015h101.1a10.015 10.015 0 0 0 10.015-10.016v-.063a10.015 10.015 0 0 0-10.016-10.015zM220.084 71.387H120.37a7.136 7.136 0 0 0-7.137 7.136v.064a7.136 7.136 0 0 0 7.137 7.136h99.714a7.136 7.136 0 0 0 7.137-7.136v-.064a7.136 7.136 0 0 0-7.137-7.136z"></path></svg>
+                        <h2>WhatsApp Clone</h2>
+                        <p>Send and receive messages in real-time.<br>Select a chat to start messaging.</p>
+                    </div>
+                </div>
+
+                <div id="active-chat" class="active-chat" style="display:none;">
+                    <header class="chat-header">
+                        <button class="icon-btn back-btn" id="back-btn"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path></svg></button>
+                        <div class="avatar avatar-sm" id="chat-avatar"><span id="chat-avatar-letter"></span></div>
+                        <div class="chat-user-info"><h3 id="chat-username"></h3><p id="chat-status"></p></div>
+                        <div class="chat-header-actions">
+                            <button class="icon-btn" id="audio-call-btn" title="Voice call"><svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"></path></svg></button>
+                            <button class="icon-btn" id="video-call-btn" title="Video call"><svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"></path></svg></button>
+                        </div>
+                    </header>
+                    <div id="messages-container" class="messages-container">
+                        <div id="messages-list" class="messages-list"></div>
+                    </div>
+                    <!-- Reply Preview Bar -->
+                    <div id="reply-preview" class="reply-preview" style="display:none;">
+                        <div class="reply-preview-content">
+                            <span class="reply-preview-name" id="reply-preview-name"></span>
+                            <span class="reply-preview-text" id="reply-preview-text"></span>
+                        </div>
+                        <button class="icon-btn" id="cancel-reply"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg></button>
+                    </div>
+                    <footer class="message-input-area">
+                        <div class="attach-container">
+                            <button class="icon-btn" id="attach-btn" title="Attach">
+                                <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M1.816 15.556v.002c0 1.502.584 2.912 1.646 3.972s2.472 1.647 3.974 1.647a5.58 5.58 0 0 0 3.972-1.645l9.547-9.548c.769-.768 1.147-1.767 1.058-2.817-.079-.968-.548-1.927-1.319-2.698-1.594-1.592-4.068-1.711-5.517-.262l-7.916 7.915c-.881.881-.792 2.25.214 3.261.959.958 2.423 1.053 3.263.215l5.511-5.512c.28-.28.267-.722.053-.936l-.244-.244c-.191-.191-.567-.349-.957.04l-5.506 5.506c-.18.18-.635.127-.976-.214-.098-.097-.576-.613-.213-.973l7.915-7.917c.818-.817 2.267-.699 3.23.262.5.501.802 1.1.849 1.685.051.573-.156 1.111-.589 1.543l-9.547 9.549a3.97 3.97 0 0 1-2.829 1.171 3.975 3.975 0 0 1-2.83-1.173 3.973 3.973 0 0 1-1.172-2.828c0-1.071.415-2.076 1.172-2.83l7.209-7.211c.157-.157.264-.579.028-.814L11.5 4.36a.572.572 0 0 0-.834.018l-7.205 7.207a5.577 5.577 0 0 0-1.645 3.971z"></path></svg>
+                            </button>
+                            <div id="attach-menu" class="attach-menu" style="display:none;">
+                                <button class="attach-item" id="attach-image">🖼️ Image</button>
+                                <button class="attach-item" id="attach-doc">📄 Document</button>
+                            </div>
+                        </div>
+                        <input type="file" id="image-upload" accept="image/*" hidden>
+                        <input type="file" id="doc-upload" accept="*/*" hidden>
+                        
+                        <div class="input-container">
+                            <input type="text" id="message-input" placeholder="Type a message" autocomplete="off">
+                            <button class="send-btn" id="send-btn" title="Send" style="display:none;"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M1.101 21.757L23.8 12.028 1.101 2.3l.011 7.912 13.623 1.816-13.623 1.817-.011 7.912z"></path></svg></button>
+                            <button class="send-btn mic-btn" id="mic-btn" title="Hold to record"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M11.999 14.942c2.001 0 3.531-1.53 3.531-3.531V4.35c0-2.001-1.53-3.531-3.531-3.531S8.469 2.349 8.469 4.35v7.061c0 2.001 1.53 3.531 3.53 3.531zm6.238-3.53c0 3.531-2.942 6.002-6.237 6.002s-6.237-2.471-6.237-6.002H3.761c0 4.001 3.178 7.297 7.061 7.885v3.884h2.354v-3.884c3.884-.588 7.061-3.884 7.061-7.885h-2.002z"></path></svg></button>
+                        </div>
+                    </footer>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- CALL OVERLAY -->
+    <div id="call-overlay" class="call-overlay" style="display:none;">
+        <div class="call-container">
+            <div class="call-bg-pattern"></div>
+            <div class="call-content">
+                <div class="call-avatar" id="call-avatar"><span id="call-avatar-letter"></span></div>
+                <h2 id="call-name"></h2>
+                <p id="call-state" class="call-state">Calling...</p>
+                <p id="call-timer" class="call-timer" style="display:none;">00:00</p>
+                <!-- Video elements -->
+                <div id="video-container" class="video-container" style="display:none;">
+                    <video id="remote-video" autoplay playsinline></video>
+                    <video id="local-video" autoplay playsinline muted></video>
+                </div>
+            </div>
+            <div class="call-actions">
+                <button class="call-action-btn" id="toggle-mic" title="Mute"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="#fff" d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"></path></svg></button>
+                <button class="call-action-btn call-end-btn" id="end-call-btn" title="End call"><svg viewBox="0 0 24 24" width="28" height="28"><path fill="#fff" d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 0 1-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"></path></svg></button>
+                <button class="call-action-btn" id="toggle-camera" title="Camera" style="display:none;"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="#fff" d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"></path></svg></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- INCOMING CALL MODAL -->
+    <div id="incoming-call" class="incoming-call-modal" style="display:none;">
+        <div class="incoming-call-card">
+            <div class="incoming-call-avatar" id="incoming-avatar"><span id="incoming-avatar-letter"></span></div>
+            <h3 id="incoming-name"></h3>
+            <p id="incoming-type">Incoming voice call...</p>
+            <div class="incoming-call-actions">
+                <button class="call-action-btn call-end-btn" id="reject-call-btn" title="Decline"><svg viewBox="0 0 24 24" width="28" height="28"><path fill="#fff" d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 0 1-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"></path></svg></button>
+                <button class="call-action-btn call-accept-btn" id="accept-call-btn" title="Accept"><svg viewBox="0 0 24 24" width="28" height="28"><path fill="#fff" d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"></path></svg></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/app.js?v=4"></script>
+</body>
+</html>
