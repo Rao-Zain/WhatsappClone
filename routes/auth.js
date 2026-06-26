@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const db = require('../config/database');
 const { generateToken, verifyToken } = require('../middleware/auth');
 
@@ -135,6 +136,86 @@ router.post('/login', async (req, res) => {
 
     } catch (err) {
         console.error('Login error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ─── FORGOT PASSWORD ─────────────────────────────
+router.post('/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ success: false, message: 'Email is required' });
+        }
+
+        const [users] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+        if (users.length === 0) {
+            return res.json({
+                success: true,
+                message: 'If an account exists for that email, a password reset code has been generated.'
+            });
+        }
+
+        const resetToken = crypto.randomBytes(20).toString('hex');
+        const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+        await db.query(
+            'UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?',
+            [resetToken, resetExpires, email]
+        );
+
+        console.log(`Password reset token for ${email}: ${resetToken}`);
+
+        res.json({
+            success: true,
+            message: 'Password reset code generated. Use it within 1 hour.',
+            token: resetToken
+        });
+    } catch (err) {
+        console.error('Forgot password error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ─── RESET PASSWORD ──────────────────────────────
+router.post('/reset-password', async (req, res) => {
+    try {
+        const { email, token, password } = req.body;
+
+        if (!email || !token || !password) {
+            return res.status(400).json({ success: false, message: 'Email, reset code, and new password are required' });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+        }
+
+        const [users] = await db.query(
+            'SELECT id, reset_token, reset_token_expires FROM users WHERE email = ?',
+            [email]
+        );
+
+        if (users.length === 0) {
+            return res.status(400).json({ success: false, message: 'Invalid email or reset code' });
+        }
+
+        const user = users[0];
+        const expiresAt = user.reset_token_expires ? new Date(user.reset_token_expires) : null;
+
+        if (!user.reset_token || user.reset_token !== token || !expiresAt || expiresAt < new Date()) {
+            return res.status(400).json({ success: false, message: 'Invalid or expired reset code' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        await db.query(
+            'UPDATE users SET password = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?',
+            [hashedPassword, user.id]
+        );
+
+        res.json({ success: true, message: 'Password has been reset. Please sign in with your new password.' });
+    } catch (err) {
+        console.error('Reset password error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });

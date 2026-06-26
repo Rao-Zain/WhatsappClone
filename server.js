@@ -20,6 +20,7 @@ const io = new Server(server, {
         methods: ['GET', 'POST']
     }
 });
+app.set('io', io);
 
 // ─── Middleware ──────────────────────────────────
 app.use(cors());
@@ -55,8 +56,18 @@ initializeSocket(io);
 
 // ─── Start Server ───────────────────────────────
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`\n🚀 WhatsApp Clone Server running on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+    const os = require('os');
+    const nets = os.networkInterfaces();
+    let localIP = 'localhost';
+    for (const name of Object.keys(nets)) {
+        for (const net of nets[name]) {
+            if (net.family === 'IPv4' && !net.internal) { localIP = net.address; break; }
+        }
+    }
+    console.log(`\n🚀 WhatsApp Clone Server running!`);
+    console.log(`   ➜ Local:   http://localhost:${PORT}`);
+    console.log(`   ➜ Network: http://${localIP}:${PORT}  ← use this on your phone!`);
     console.log(`📡 WebSocket ready for connections`);
     console.log(`📦 API routes mounted at /api\n`);
 });

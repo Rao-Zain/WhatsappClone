@@ -23,6 +23,28 @@ function initializeSocket(io) {
         io.emit('user:online', { userId });
         socket.emit('users:online', Array.from(onlineUsers.keys()));
 
+        // Mark offline messages as delivered
+        try {
+            const [undelivered] = await db.query(
+                `SELECT DISTINCT sender_id FROM messages WHERE receiver_id = ? AND status = 'sent'`,
+                [userId]
+            );
+            if (undelivered.length > 0) {
+                await db.query(
+                    `UPDATE messages SET status = 'delivered' WHERE receiver_id = ? AND status = 'sent'`,
+                    [userId]
+                );
+                for (const row of undelivered) {
+                    const senderSocketId = onlineUsers.get(row.sender_id);
+                    if (senderSocketId) {
+                        io.to(senderSocketId).emit('message:status_bulk', { receiverId: userId, status: 'delivered' });
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Offline delivery update error:', err);
+        }
+
         // ─── Send Message (with reply support) ──────
         socket.on('message:send', async (data) => {
             try {

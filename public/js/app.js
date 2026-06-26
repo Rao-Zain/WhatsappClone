@@ -36,6 +36,19 @@ let callTimerInterval = null;
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
+// Dynamic viewport height handler for mobile keyboards & browsers
+function updateViewportHeight() {
+    const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty('--viewport-height', `${height}px`);
+}
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', updateViewportHeight);
+    window.visualViewport.addEventListener('scroll', updateViewportHeight);
+} else {
+    window.addEventListener('resize', updateViewportHeight);
+}
+updateViewportHeight();
+
 // ─── UI ELEMENTS ─────────────────────────────────
 const authScreen = $('#auth-screen');
 const chatScreen = $('#chat-screen');
@@ -114,8 +127,56 @@ $('#register-form').addEventListener('submit', async (e) => {
     else showToast(data.message, true);
 });
 
-$('#show-register').onclick = (e) => { e.preventDefault(); $('#login-form').classList.remove('active'); $('#register-form').classList.add('active'); };
-$('#show-login').onclick = (e) => { e.preventDefault(); $('#register-form').classList.remove('active'); $('#login-form').classList.add('active'); };
+$('#forgot-password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = await api('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email: $('#forgot-email').value }) });
+    if (data.success) {
+        showToast(data.message);
+        if (data.token) {
+            $('#reset-email').value = $('#forgot-email').value;
+            showAuthForm('reset-password-form');
+            showToast('Password reset code generated. Check console output.');
+        }
+    } else {
+        showToast(data.message, true);
+    }
+});
+
+$('#reset-password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const password = $('#reset-password').value;
+    const confirmPassword = $('#reset-password-confirm').value;
+    if (password !== confirmPassword) {
+        return showToast('Passwords do not match', true);
+    }
+    const data = await api('/api/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({
+            email: $('#reset-email').value,
+            token: $('#reset-token').value,
+            password
+        })
+    });
+    if (data.success) {
+        showToast(data.message);
+        showAuthForm('login-form');
+    } else {
+        showToast(data.message, true);
+    }
+});
+
+$('#show-register').onclick = (e) => { e.preventDefault(); showAuthForm('register-form'); };
+$('#show-login').onclick = (e) => { e.preventDefault(); showAuthForm('login-form'); };
+$('#show-forgot-password').onclick = (e) => { e.preventDefault(); showAuthForm('forgot-password-form'); };
+$('#show-login-from-forgot').onclick = (e) => { e.preventDefault(); showAuthForm('login-form'); };
+$('#show-login-from-reset').onclick = (e) => { e.preventDefault(); showAuthForm('login-form'); };
+
+function showAuthForm(formId) {
+    ['login-form', 'register-form', 'forgot-password-form', 'reset-password-form'].forEach(id => {
+        const form = $(`#${id}`);
+        if (form) form.classList.toggle('active', id === formId);
+    });
+}
 
 function enterChatScreen() {
     authScreen.classList.remove('active');
@@ -235,6 +296,34 @@ function setMyAvatar() {
     el.className = `avatar avatar-sm ${getAvatarColor(currentUser.id)} ${hasImg ? 'has-image' : ''}`;
 }
 
+function updateMessageStatus(messageId, status) {
+    const el = $(`#msg-${messageId}`);
+    if (el) {
+        const meta = el.querySelector('.message-meta');
+        if (meta) {
+            const statusEl = meta.querySelector('.message-status');
+            if (statusEl) {
+                statusEl.outerHTML = getStatusIcon(status);
+            } else {
+                meta.insertAdjacentHTML('beforeend', getStatusIcon(status));
+            }
+        }
+    }
+}
+
+function updateAllOutgoingToSeen() {
+    const messages = $$('.message-outgoing');
+    messages.forEach(el => {
+        const meta = el.querySelector('.message-meta');
+        if (meta) {
+            const statusEl = meta.querySelector('.message-status');
+            if (statusEl) {
+                statusEl.outerHTML = getStatusIcon('seen');
+            }
+        }
+    });
+}
+
 // ─── SOCKET & CHAT ──────────────────────────────
 function connectSocket() {
     socket = io({ auth: { token } });
@@ -248,6 +337,58 @@ function connectSocket() {
     });
     socket.on('message:sent', (msg) => { if (activeChat && activeChat.id === msg.receiver_id) { appendMessage(msg, true); scrollToBottom(); } loadConversations(); });
     
+    // Status updates
+    socket.on('message:status', (data) => {
+        const { messageId, status } = data;
+        updateMessageStatus(messageId, status);
+        loadConversations();
+    });
+    socket.on('message:status_bulk', (data) => {
+        const { receiverId, status } = data;
+        if (activeChat && activeChat.id === receiverId) {
+            const messages = $$('.message-outgoing');
+            messages.forEach(el => {
+                const meta = el.querySelector('.message-meta');
+                if (meta) {
+                    const statusEl = meta.querySelector('.message-status');
+                    if (statusEl && !statusEl.classList.contains('status-seen')) {
+                        statusEl.outerHTML = getStatusIcon(status);
+                    }
+                }
+            });
+        }
+        loadConversations();
+    });
+    socket.on('message:seen', (data) => {
+        const { seenBy } = data;
+        if (activeChat && activeChat.id === seenBy) {
+            updateAllOutgoingToSeen();
+        }
+        loadConversations();
+    });
+    
+    socket.on('message:delete', (data) => {
+        const { messageId, type } = data;
+        if (type === 'everyone') {
+            const el = $(`#msg-${messageId}`);
+            if (el) {
+                el.className = `message ${el.classList.contains('message-outgoing') ? 'message-outgoing' : 'message-incoming'} message-deleted`;
+                const contentEl = el.querySelector('.message-content');
+                if (contentEl) {
+                    contentEl.style.cssText = 'color: var(--text-tertiary); font-style: italic;';
+                    contentEl.innerHTML = '🚫 This message was deleted';
+                }
+                const quoteEl = el.querySelector('.reply-quote');
+                if (quoteEl) quoteEl.remove();
+                const dropdownEl = el.querySelector('.message-dropdown');
+                if (dropdownEl) dropdownEl.remove();
+                const statusEl = el.querySelector('.message-status');
+                if (statusEl) statusEl.remove();
+            }
+            loadConversations();
+        }
+    });
+
     // Call Signaling
     socket.on('call:incoming', handleIncomingCall);
     socket.on('call:accepted', handleCallAccepted);
@@ -281,7 +422,7 @@ function renderConversations(convos) {
                     <span class="chat-item-time">${formatTime(c.last_message_time)}</span>
                 </div>
                 <div class="chat-item-bottom">
-                    <span class="chat-item-preview">${c.last_message_type === 'audio' ? '🎤 Voice Note' : (c.last_message_type === 'image' ? '🖼️ Image' : (c.last_message_type === 'document' ? '📄 Document' : escapeHtml(c.last_message)))}</span>
+                    <span class="chat-item-preview">${c.last_message_is_deleted ? '🚫 This message was deleted' : (c.last_message_type === 'audio' ? '🎤 Voice Note' : (c.last_message_type === 'image' ? '🖼️ Image' : (c.last_message_type === 'document' ? '📄 Document' : escapeHtml(c.last_message))))}</span>
                     ${c.unread_count > 0 ? `<span class="unread-badge">${c.unread_count}</span>` : ''}
                 </div>
             </div>
@@ -316,10 +457,21 @@ function renderMessages(msgs) {
 }
 
 function createMessageHTML(m, out) {
+    if (m.is_deleted) {
+        return `<div class="message ${out ? 'message-outgoing' : 'message-incoming'} message-deleted" id="msg-${m.id}">
+            <div class="message-content" style="color: var(--text-tertiary); font-style: italic;">
+                🚫 This message was deleted
+            </div>
+            <div class="message-meta">
+                <span class="message-time">${formatTime(m.created_at)}</span>
+            </div>
+        </div>`;
+    }
+
     const replyHTML = m.reply ? `
         <div class="reply-quote" onclick="scrollToMessage(${m.reply_to_id})">
             <span class="reply-quote-name">${escapeHtml(m.reply.sender_name)}</span>
-            <span class="reply-quote-text">${escapeHtml(m.reply.content)}</span>
+            <span class="reply-quote-text">${m.reply.is_deleted ? '🚫 This message was deleted' : escapeHtml(m.reply.content)}</span>
         </div>` : '';
     
     const senderName = m.sender_name || (out ? currentUser.username : activeChat.username);
@@ -338,10 +490,20 @@ function createMessageHTML(m, out) {
         </a>`;
     }
 
+    const dropdownHTML = `
+        <div class="message-dropdown">
+            <button class="msg-dropdown-trigger" onclick="toggleMessageMenu(event, ${m.id})">
+                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2.9 2-2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+            </button>
+            <div class="msg-dropdown-menu" id="msg-menu-${m.id}" style="display:none;">
+                <button onclick="triggerReply(${m.id}, '${safeName}', '${safeContent}')">Reply</button>
+                <button onclick="triggerDeleteMe(${m.id})">Delete for Me</button>
+                ${out ? `<button onclick="triggerDeleteEveryone(${m.id})">Delete for Everyone</button>` : ''}
+            </div>
+        </div>`;
+
     return `<div class="message ${out ? 'message-outgoing' : 'message-incoming'}" id="msg-${m.id}">
-        <button class="msg-reply-btn" onclick="setReply(${m.id}, '${safeName}', '${safeContent}')">
-            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
-        </button>
+        ${dropdownHTML}
         ${replyHTML}
         <div class="message-content">${contentHTML}</div>
         <div class="message-meta"><span class="message-time">${formatTime(m.created_at)}</span>${out ? getStatusIcon(m.status) : ''}</div>
@@ -578,3 +740,55 @@ searchInput.addEventListener('input', (e) => {
     );
     renderConversations(filtered);
 });
+
+// ─── MESSAGE MENU & DELETION ─────────────────────
+window.toggleMessageMenu = (event, id) => {
+    event.stopPropagation();
+    $$('.msg-dropdown-menu').forEach(el => {
+        if (el.id !== `msg-menu-${id}`) el.style.display = 'none';
+    });
+    const menu = $(`#msg-menu-${id}`);
+    if (menu) {
+        menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+    }
+};
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.message-dropdown')) {
+        $$('.msg-dropdown-menu').forEach(el => el.style.display = 'none');
+    }
+});
+
+window.triggerReply = (id, name, content) => {
+    window.setReply(id, name, content);
+    const menu = $(`#msg-menu-${id}`);
+    if (menu) menu.style.display = 'none';
+};
+
+window.triggerDeleteMe = async (id) => {
+    if (confirm('Delete this message for me?')) {
+        const res = await api(`/api/messages/${id}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ type: 'me' })
+        });
+        if (res.success) {
+            const el = $(`#msg-${id}`);
+            if (el) el.remove();
+            loadConversations();
+        } else {
+            showToast(res.message || 'Failed to delete message', true);
+        }
+    }
+};
+
+window.triggerDeleteEveryone = async (id) => {
+    if (confirm('Delete this message for everyone?')) {
+        const res = await api(`/api/messages/${id}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ type: 'everyone' })
+        });
+        if (!res.success) {
+            showToast(res.message || 'Failed to delete message', true);
+        }
+    }
+};

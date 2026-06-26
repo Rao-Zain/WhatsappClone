@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="description" content="WhatsApp Clone - Real-time messaging application">
     <title>WhatsApp Clone</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=8">
 </head>
 <body>
     <!-- AUTH SCREEN -->
@@ -24,7 +24,21 @@
                 <div class="form-group"><label for="login-email">Email</label><input type="email" id="login-email" placeholder="Enter your email" required></div>
                 <div class="form-group"><label for="login-password">Password</label><input type="password" id="login-password" placeholder="Enter your password" required></div>
                 <button type="submit" id="login-btn" class="btn btn-primary">Sign In</button>
+                <p class="auth-switch"><a href="#" id="show-forgot-password">Forgot password?</a></p>
                 <p class="auth-switch">Don't have an account? <a href="#" id="show-register">Sign up</a></p>
+            </form>
+            <form id="forgot-password-form" class="auth-form">
+                <div class="form-group"><label for="forgot-email">Email</label><input type="email" id="forgot-email" placeholder="Enter your account email" required></div>
+                <button type="submit" id="forgot-password-btn" class="btn btn-primary">Request Reset Code</button>
+                <p class="auth-switch">Remembered your password? <a href="#" id="show-login-from-forgot">Sign in</a></p>
+            </form>
+            <form id="reset-password-form" class="auth-form">
+                <div class="form-group"><label for="reset-email">Email</label><input type="email" id="reset-email" placeholder="Enter your email" required></div>
+                <div class="form-group"><label for="reset-token">Reset Code</label><input type="text" id="reset-token" placeholder="Enter the reset code" required></div>
+                <div class="form-group"><label for="reset-password">New Password</label><input type="password" id="reset-password" placeholder="Create a new password" required></div>
+                <div class="form-group"><label for="reset-password-confirm">Confirm Password</label><input type="password" id="reset-password-confirm" placeholder="Confirm new password" required></div>
+                <button type="submit" id="reset-password-btn" class="btn btn-primary">Reset Password</button>
+                <p class="auth-switch">Back to <a href="#" id="show-login-from-reset">Sign in</a></p>
             </form>
             <form id="register-form" class="auth-form">
                 <div class="form-group"><label for="register-username">Username</label><input type="text" id="register-username" placeholder="Choose a username" required></div>
@@ -168,6 +182,6 @@
 
     <div id="toast" class="toast"></div>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/app.js?v=4"></script>
+    <script src="js/app.js?v=8"></script>
 </body>
 </html>

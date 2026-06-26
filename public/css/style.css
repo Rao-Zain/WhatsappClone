@@ -95,6 +95,8 @@ input, button {
 .screen {
     display: none;
     height: 100vh;
+    height: 100dvh;
+    height: var(--viewport-height, 100dvh);
     width: 100vw;
 }
 
@@ -768,12 +770,17 @@ input, button {
 .message-input-area {
     padding: 8px 16px;
     background: var(--bg-header);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
 }
 
 .input-container {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex: 1;
 }
 
 .input-container input {
@@ -1295,16 +1302,33 @@ input, button {
    MEDIA QUERIES (Mobile Responsiveness)
    ═══════════════════════════════════════════════════ */
 @media (max-width: 768px) {
+    /* Use dynamic viewport height for mobile */
+    #chat-screen.screen.active {
+        align-items: stretch;
+        justify-content: flex-start;
+    }
+
+    .app-container {
+        height: 100vh;
+        height: 100dvh;
+        height: var(--viewport-height, 100dvh);
+    }
+
     .sidebar {
         width: 100%;
         min-width: 100%;
+        height: 100dvh;
+        height: var(--viewport-height, 100dvh);
     }
-    
+
     .chat-area {
         display: none !important;
         width: 100%;
+        height: 100dvh;
+        height: var(--viewport-height, 100dvh);
     }
 
+    /* When a chat is open on mobile: hide sidebar, show chat */
     .app-container.chat-active .sidebar {
         display: none !important;
     }
@@ -1313,10 +1337,201 @@ input, button {
         display: flex !important;
     }
 
+    /* Show back button on mobile */
     .chat-header .back-btn {
         display: flex;
         align-items: center;
         justify-content: center;
     }
+
+    /* Active chat layout fix for mobile */
+    .active-chat {
+        height: 100dvh;
+        height: var(--viewport-height, 100dvh);
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Messages container takes all available space */
+    .messages-container {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 10px 12px;
+    }
+
+    /* Input area stays visible at bottom */
+    .message-input-area {
+        padding: 6px 10px;
+        padding-bottom: max(6px, env(safe-area-inset-bottom));
+        flex-shrink: 0;
+        background: var(--bg-header);
+    }
+
+    .input-container {
+        gap: 6px;
+    }
+
+    .input-container input {
+        padding: 10px 12px;
+        font-size: 16px; /* Prevents iOS zoom on focus */
+    }
+
+    /* Make sure send AND mic buttons are visible on mobile */
+    .send-btn, .mic-btn {
+        width: 40px;
+        height: 40px;
+        flex-shrink: 0;
+    }
+
+    /* Attach button */
+    .attach-container .icon-btn {
+        padding: 6px;
+    }
+
+    /* Sidebar header */
+    .sidebar-header {
+        padding: 10px 12px;
+        min-height: 56px;
+        padding-top: max(10px, env(safe-area-inset-top));
+    }
+
+    /* Chat header */
+    .chat-header {
+        padding: 8px 10px;
+        gap: 8px;
+        min-height: 56px;
+        padding-top: max(8px, env(safe-area-inset-top));
+    }
+
+    .chat-header-actions {
+        gap: 0;
+    }
+
+    /* Search bar */
+    .search-container {
+        padding: 6px 10px;
+    }
+
+    /* Chat list items */
+    .chat-item {
+        padding: 10px 12px;
+    }
+
+    /* Reply preview */
+    .reply-preview {
+        padding: 6px 10px;
+    }
+
+    /* Messages */
+    .message {
+        max-width: 85%;
+    }
+
+    /* Call overlay */
+    .call-overlay .call-container {
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+    }
+
+    /* Profile panel */
+    .profile-panel {
+        width: 100%;
+    }
+
+    /* Contacts panel */
+    .contacts-panel {
+        width: 100%;
+    }
+
+    /* Attach menu */
+    .attach-menu {
+        bottom: 45px;
+    }
 }
 
+/* Extra small phones */
+@media (max-width: 380px) {
+    .input-container input {
+        padding: 8px 10px;
+    }
+
+    .send-btn, .mic-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    .chat-header {
+        gap: 6px;
+        padding: 6px 8px;
+    }
+}
+
+/* ─── Message Dropdown Options ────────────────── */
+.message {
+    padding-right: 28px !important;
+}
+.message-deleted {
+    padding-right: 12px !important; /* No dropdown for deleted messages */
+}
+.message-dropdown {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 10;
+}
+.msg-dropdown-trigger {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    opacity: 0;
+    transition: opacity 0.2s;
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.message:hover .msg-dropdown-trigger {
+    opacity: 1;
+}
+.msg-dropdown-trigger:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+}
+.msg-dropdown-menu {
+    position: absolute;
+    top: 26px;
+    right: 0;
+    background: var(--bg-panel);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-color);
+    padding: 6px 0;
+    min-width: 150px;
+    display: none;
+    flex-direction: column;
+    z-index: 100;
+}
+.msg-dropdown-menu button {
+    background: none;
+    border: none;
+    width: 100%;
+    padding: 8px 16px;
+    text-align: left;
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.msg-dropdown-menu button:hover {
+    background: var(--bg-hover);
+}
+
+@media (max-width: 768px) {
+    .msg-dropdown-trigger {
+        opacity: 0.8 !important;
+    }
+}
