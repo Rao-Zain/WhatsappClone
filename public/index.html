@@ -7,7 +7,7 @@
     <title>WhatsApp Clone</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=8">
+    <link rel="stylesheet" href="css/style.css?v=9">
 </head>
 <body>
     <!-- AUTH SCREEN -->
@@ -155,9 +155,10 @@
                 <p id="call-timer" class="call-timer" style="display:none;">00:00</p>
                 <!-- Video elements -->
                 <div id="video-container" class="video-container" style="display:none;">
-                    <video id="remote-video" autoplay playsinline></video>
+                    <video id="remote-video" autoplay playsinline muted></video>
                     <video id="local-video" autoplay playsinline muted></video>
                 </div>
+                <audio id="remote-audio" autoplay></audio>
             </div>
             <div class="call-actions">
                 <button class="call-action-btn" id="toggle-mic" title="Mute"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="#fff" d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"></path></svg></button>
@@ -182,6 +183,6 @@
 
     <div id="toast" class="toast"></div>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/app.js?v=8"></script>
+    <script src="js/app.js?v=9"></script>
 </body>
 </html>

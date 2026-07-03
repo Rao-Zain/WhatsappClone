@@ -661,8 +661,14 @@ async function setupWebRTC(targetUserId, isCaller = false) {
         localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
         peerConnection.ontrack = (event) => {
+            const remoteAudio = $('#remote-audio');
+            if (remoteAudio && !remoteAudio.srcObject) {
+                remoteAudio.srcObject = event.streams[0];
+                remoteAudio.play().catch(err => console.warn('Audio play autoplay warning:', err));
+            }
             if (!$('#remote-video').srcObject) {
                 $('#remote-video').srcObject = event.streams[0];
+                $('#remote-video').play().catch(err => console.warn('Video play autoplay warning:', err));
                 startTimer();
             }
         };
@@ -711,6 +717,17 @@ function endCallUI() {
     $('#call-overlay').style.display = 'none';
     if (localStream) localStream.getTracks().forEach(t => t.stop());
     if (peerConnection) peerConnection.close();
+    localStream = null;
+    peerConnection = null;
+
+    // Reset media elements
+    const remoteVideo = $('#remote-video');
+    const localVideo = $('#local-video');
+    const remoteAudio = $('#remote-audio');
+    if (remoteVideo) remoteVideo.srcObject = null;
+    if (localVideo) localVideo.srcObject = null;
+    if (remoteAudio) remoteAudio.srcObject = null;
+
     clearInterval(callTimerInterval);
     $('#call-timer').textContent = '00:00';
     $('#video-container').style.display = 'none';
