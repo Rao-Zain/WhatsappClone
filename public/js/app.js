@@ -581,28 +581,90 @@ micBtn.onmouseleave = stopRecording;
 micBtn.ontouchstart = (e) => { e.preventDefault(); startRecording(); };
 micBtn.ontouchend = (e) => { e.preventDefault(); stopRecording(); };
 
+let recordingSeconds = 0;
+let recordingInterval = null;
+
 async function startRecording() {
     if (!activeChat) return showToast('Open a chat to record audio');
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
+        
+        // MimeType detection for cross-browser support (e.g. Safari on iOS uses audio/mp4)
+        let options = {};
+        let extension = 'webm';
+        if (MediaRecorder.isTypeSupported('audio/webm')) {
+            options = { mimeType: 'audio/webm' };
+            extension = 'webm';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+            options = { mimeType: 'audio/mp4' };
+            extension = 'mp4';
+        }
+        
+        mediaRecorder = new MediaRecorder(stream, options);
         audioChunks = [];
         mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+        
         mediaRecorder.onstop = async () => {
             stream.getTracks().forEach(t => t.stop());
+            clearInterval(recordingInterval);
+            
+            // Restore UI
+            $('#message-input').style.display = 'block';
+            $('#recording-timer-container').style.display = 'none';
+            micBtn.classList.remove('recording');
+
             if (audioChunks.length === 0) return;
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            
+            // Discard accidental clicks / recordings under 1s
+            if (recordingSeconds < 1) {
+                showToast('Hold to record', false);
+                return;
+            }
+
+            const actualMimeType = mediaRecorder.mimeType || 'audio/webm';
+            let actualExtension = extension;
+            if (actualMimeType.includes('mp4')) actualExtension = 'mp4';
+            else if (actualMimeType.includes('ogg')) actualExtension = 'ogg';
+            else if (actualMimeType.includes('wav')) actualExtension = 'wav';
+
+            const audioBlob = new Blob(audioChunks, { type: actualMimeType });
             const fd = new FormData();
-            fd.append('file', audioBlob, 'voicenote.webm');
-            const data = await fetch('/api/messages/upload', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd }).then(r=>r.json());
+            fd.append('file', audioBlob, `voicenote.${actualExtension}`);
+            
+            const data = await fetch('/api/messages/upload', { 
+                method: 'POST', 
+                headers: { 'Authorization': `Bearer ${token}` }, 
+                body: fd 
+            }).then(r => r.json());
+            
             if (data.success && activeChat) {
                 socket.emit('message:send', { receiverId: activeChat.id, content: data.filename, messageType: 'audio', replyToId: replyToMessage?.id });
                 replyToMessage = null; replyPreview.style.display = 'none';
             }
         };
+        
+        // Start recording
         mediaRecorder.start();
+        
+        // Update UI
+        $('#message-input').style.display = 'none';
+        $('#recording-timer-container').style.display = 'flex';
+        $('#recording-time').textContent = '00:00';
         micBtn.classList.add('recording');
-    } catch (err) { showToast('Microphone access denied', true); }
+        
+        // Start UI Timer
+        recordingSeconds = 0;
+        recordingInterval = setInterval(() => {
+            recordingSeconds++;
+            const m = Math.floor(recordingSeconds / 60).toString().padStart(2, '0');
+            const s = (recordingSeconds % 60).toString().padStart(2, '0');
+            $('#recording-time').textContent = `${m}:${s}`;
+        }, 1000);
+        
+    } catch (err) { 
+        console.error('Mic record error:', err);
+        showToast('Microphone access denied', true); 
+    }
 }
 
 function stopRecording() {
