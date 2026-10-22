@@ -102,6 +102,10 @@ function formatConversation(conversation, currentUserId) {
       : lastMessage?.text || "No messages yet",
 
     username: isGroup ? "" : otherParticipant?.username || "",
+
+    profileName: isGroup ? "" : otherParticipant?.name || "",   // ADD
+    about: isGroup ? "" : otherParticipant?.about || "",       
+
     userId: isGroup
       ? ""
       : String(otherParticipant?._id || otherParticipant?.id || ""),
@@ -186,6 +190,16 @@ export default function AppLayout() {
   // Name of a participant inside the call grid
   const getUserName = (userId) =>
     chats.find((c) => c.userId === String(userId))?.name || "Participant";
+
+
+  // Photo for the ringing screen (personal chat photo or group picture)
+const getCallAvatar = (conversationId) =>
+  chats.find((c) => c.id === String(conversationId))?.avatar || "";
+
+// Photo for a participant inside an active call
+const getUserAvatar = (userId) =>
+  chats.find((c) => c.userId === String(userId))?.avatar || "";
+
   // Load the existing conversations when the layout opens.
   useEffect(() => {
     let cancelled = false;
@@ -436,6 +450,58 @@ export default function AppLayout() {
     };
   }, [selectedChatId, playMessage]);
 
+
+    // Live profile updates (name, username, about, photo) from other users,
+  // and from my own other tabs/devices.
+  useEffect(() => {
+    const socket = getSocket();
+
+    function handleUserUpdated(payload) {
+      const { userId, ...changes } = payload || {};
+      if (!userId) return;
+
+      const id = String(userId);
+
+      // My own profile changed in another tab or device.
+      if (id === String(getCurrentUserId())) {
+        setUser((previous) => (previous ? { ...previous, ...changes } : previous));
+        return;
+      }
+
+      // A contact changed their profile: patch their chats in place.
+      setChats((previousChats) =>
+        previousChats.map((chat) => {
+          if (chat.type !== "personal" || chat.userId !== id) return chat;
+
+          const profileName = changes.name ?? chat.profileName ?? "";
+          const username = changes.username ?? chat.username ?? "";
+
+          return {
+            ...chat,
+            profileName,
+            username,
+            about: changes.about ?? chat.about,
+            avatar: changes.profilePicture ?? chat.avatar,
+            // Same rule as formatConversation: name, else username.
+            name: profileName.trim() || username || "Unknown user",
+          };
+        })
+      );
+    }
+
+    socket.on("user:updated", handleUserUpdated);
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    return () => {
+      socket.off("user:updated", handleUserUpdated);
+    };
+  }, [setUser]);
+
+
+
   // Clear unread messages as soon as the user opens a conversation.
   function handleSelectChat(chatId) {
     const id = String(chatId);
@@ -654,11 +720,13 @@ export default function AppLayout() {
 
       </div>
 
-      <CallOverlay
-        call={call}
-        getUserName={getUserName}
-        getCallTitle={getCallTitle}
-      />
+     <CallOverlay
+  call={call}
+  getUserName={getUserName}
+  getCallTitle={getCallTitle}
+  getCallAvatar={getCallAvatar}
+  getUserAvatar={getUserAvatar}
+/>
     </PresenceProvider>
   );
 }

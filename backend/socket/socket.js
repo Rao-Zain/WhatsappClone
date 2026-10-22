@@ -65,6 +65,32 @@ function emitToUsers(io, userIds, event, payload) {
   io.to(userIds.map((id) => `user:${id}`)).emit(event, payload);
 }
 
+// Tell every contact (and the user's own other tabs) that a profile changed.
+// Only whitelisted public fields are ever sent.
+const PUBLIC_PROFILE_FIELDS = ["name", "username", "about", "profilePicture"];
+
+export async function broadcastProfileUpdate(io, userId, changes) {
+  try {
+    if (!io || !changes) return;
+
+    const id = String(userId);
+    const payload = { userId: id };
+
+    for (const field of PUBLIC_PROFILE_FIELDS) {
+      if (changes[field] !== undefined) payload[field] = changes[field];
+    }
+
+    // Nothing public changed.
+    if (Object.keys(payload).length === 1) return;
+
+    const contactIds = await getContactIds(id);
+
+    emitToUsers(io, [...contactIds, id], "user:updated", payload);
+  } catch (error) {
+    console.error("Profile broadcast error:", error.message);
+  }
+}
+
 async function markPendingMessagesDelivered(io, userId) {
   try {
     const conversations = await Conversation.find({

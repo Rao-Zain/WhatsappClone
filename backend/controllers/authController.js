@@ -6,6 +6,7 @@ import { createHash, randomInt } from "node:crypto";
 import User from "../models/User.js";
 import PendingRegistration from "../models/PendingRegistration.js";
 import { sendOtpEmail } from "../utils/sendOtpEmail.js";
+import { broadcastProfileUpdate } from "../socket/socket.js";
 
 function createToken(user) {
   if (!process.env.JWT_SECRET) {
@@ -588,12 +589,17 @@ export const updateProfile = async (req, res) => {
   updates.name = cleanName;
 }
 
-
-    const updatedUser = await User.findByIdAndUpdate(
+ const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
       { $set: updates },
       { new: true, runValidators: true }
     ).select("-password -otp -otpExpires");
+
+    // ADD THIS: `updates` only contains the fields that actually changed
+    broadcastProfileUpdate(req.app.get("io"), req.user._id, updates);
+       
+
+    
 
     return res.status(200).json({
       success: true,
@@ -673,6 +679,14 @@ export async function updateProfilePicture(req, res) {
     // Replacing this field replaces the old stored image.
     req.user.profilePicture = profilePicture;
     await req.user.save();
+
+        req.user.profilePicture = profilePicture;
+    await req.user.save();
+
+    // ADD THIS
+    broadcastProfileUpdate(req.app.get("io"), req.user._id, {
+      profilePicture: req.user.profilePicture,
+    });
 
     return res.status(200).json({
       success: true,
