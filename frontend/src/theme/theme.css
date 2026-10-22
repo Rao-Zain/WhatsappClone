@@ -1,0 +1,271 @@
+/* =====================================================================
+   WHATSAPP THEME — the ONE file that controls every color in the app.
+
+   LAYER 1  PALETTES   one block per theme (~32 values each).
+                       To add a theme: copy a block, rename data-theme,
+                       change the values, then add one line in themes.js.
+   LAYER 2  SEMANTIC   what each part of the UI reads (sidebar, chat,
+                       bubbles, composer...). Derived from the palette,
+                       so a new palette re-colors everything at once.
+                       Override any token inside a theme block for
+                       fine control (e.g. --wa-bubble-out-bg: #fff;).
+   ===================================================================== */
+
+/* ---------------------------- LAYER 1 ---------------------------- */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --c-brand: #1daa61;  --c-brand-hover: #189a56;  --c-on-brand: #ffffff;
+  --c-app: #f0f2f5;    --c-surface: #ffffff;      --c-surface-alt: #f0f2f5;
+  --c-rail: #f7f5f3;   --c-search: #f6f5f4;
+  --c-hover: #f5f6f6;  --c-selected: #f5f5f5;
+  --c-border: #e9edef; --c-border-strong: #d1d7db;
+  --c-text: #111b21;   --c-text-strong: #3b4a54;  --c-text-soft: #667781;  --c-icon: #54656f;
+  --c-tint: #d9fdd3;   --c-tint-border: #a8d7b1;  --c-tint-text: #0b3d24;
+  --c-chat: #f4f1ea;   --c-ink: rgba(11, 20, 26, 0.06);
+  --c-bubble-out: #d9fdd3; --c-bubble-in: #ffffff;
+  --c-shade: rgba(11, 20, 26, 0.06);  --c-shadow: rgba(11, 20, 26, 0.15);
+  --c-quote-mine: #86694a;
+  --c-danger: #bc1c1c; --c-scroll: #c5cbd0; --c-overlay: rgba(11, 20, 26, 0.4);
+  --c-tick: #53bdeb;
+  --c-drawer: #008069; --c-on-drawer: #ffffff;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --c-brand: #00a884;  --c-brand-hover: #02906f;  --c-on-brand: #0b141a;
+  --c-app: #0b141a;    --c-surface: #111b21;      --c-surface-alt: #202c33;
+  --c-rail: #161717;   --c-search: #202c33;
+  --c-hover: #202c33;  --c-selected: #2a3942;
+  --c-border: #222d34; --c-border-strong: #2f3b43;
+  --c-text: #e9edef;   --c-text-strong: #d1d7db;  --c-text-soft: #8696a0;  --c-icon: #aebac1;
+  --c-tint: #103529;   --c-tint-border: #1f6f50;  --c-tint-text: #d9fdd3;
+  --c-chat: #0b141a;   --c-ink: rgba(255, 255, 255, 0.045);
+  --c-bubble-out: #005c4b; --c-bubble-in: #202c33;
+  --c-shade: rgba(0, 0, 0, 0.2);      --c-shadow: rgba(0, 0, 0, 0.45);
+  --c-quote-mine: #d4a373;
+  --c-danger: #f15c6d; --c-scroll: #374248; --c-overlay: rgba(0, 0, 0, 0.6);
+  --c-tick: #53bdeb;
+  --c-drawer: #202c33; --c-on-drawer: #e9edef;
+}
+
+[data-theme="ocean"] {
+  color-scheme: light;
+  --c-brand: #0a84ff;  --c-brand-hover: #0070e0;  --c-on-brand: #ffffff;
+  --c-app: #eaf1f8;    --c-surface: #ffffff;      --c-surface-alt: #eef3f9;
+  --c-rail: #f1f5fa;   --c-search: #eef3f9;
+  --c-hover: #f3f7fb;  --c-selected: #e7f0fa;
+  --c-border: #dde7f1; --c-border-strong: #c7d5e4;
+  --c-text: #0f1d2b;   --c-text-strong: #34495e;  --c-text-soft: #5f7388;  --c-icon: #4a6076;
+  --c-tint: #d6ebff;   --c-tint-border: #9cc9f5;  --c-tint-text: #0a3a6b;
+  --c-chat: #eaf2f9;   --c-ink: rgba(10, 40, 80, 0.07);
+  --c-bubble-out: #cfe6ff; --c-bubble-in: #ffffff;
+  --c-shade: rgba(10, 40, 80, 0.06);  --c-shadow: rgba(10, 40, 80, 0.15);
+  --c-quote-mine: #7a5aa6;
+  --c-danger: #c62828; --c-scroll: #bccbdb; --c-overlay: rgba(10, 25, 45, 0.45);
+  --c-tick: #0a84ff;
+  --c-drawer: #0a6ad1; --c-on-drawer: #ffffff;
+}
+
+[data-theme="rose"] {
+  color-scheme: light;
+  --c-brand: #e0457b;  --c-brand-hover: #c93a6c;  --c-on-brand: #ffffff;
+  --c-app: #fbf1f4;    --c-surface: #ffffff;      --c-surface-alt: #fbeff3;
+  --c-rail: #fbf4f6;   --c-search: #f8eef1;
+  --c-hover: #fcf5f7;  --c-selected: #f9eaef;
+  --c-border: #f1dfe5; --c-border-strong: #e6c9d3;
+  --c-text: #2a1520;   --c-text-strong: #5a3a47;  --c-text-soft: #8a6573;  --c-icon: #7a5565;
+  --c-tint: #ffe0ea;   --c-tint-border: #f4a9c0;  --c-tint-text: #6b1233;
+  --c-chat: #fbf0ee;   --c-ink: rgba(120, 30, 60, 0.07);
+  --c-bubble-out: #ffd9e5; --c-bubble-in: #ffffff;
+  --c-shade: rgba(120, 30, 60, 0.06); --c-shadow: rgba(120, 30, 60, 0.15);
+  --c-quote-mine: #9a5b2e;
+  --c-danger: #c62828; --c-scroll: #e3c5d0; --c-overlay: rgba(42, 21, 32, 0.45);
+  --c-tick: #3a9bdc;
+  --c-drawer: #c93a6c; --c-on-drawer: #ffffff;
+}
+
+/* ---------------------------- LAYER 2 ---------------------------- */
+/* Applies to <html> AND to any element carrying data-theme (used by the
+   live previews in the theme picker), so each scope re-derives itself. */
+
+:root,
+[data-theme] {
+  --wa-font: "Segoe UI", "Helvetica Neue", Helvetica, "Lucida Grande", Arial, Ubuntu, Cantarell, "Fira Sans", sans-serif;
+
+  /* Global */
+  --wa-app-bg: var(--c-app);
+  --wa-border: var(--c-border);
+  --wa-hover: color-mix(in srgb, var(--c-text) 6%, transparent);
+  --wa-pressed: color-mix(in srgb, var(--c-text) 10%, transparent);
+  --wa-text-primary: var(--c-text);
+  --wa-text-strong: var(--c-text-strong);
+  --wa-text-secondary: var(--c-text-soft);
+  --wa-icon: var(--c-icon);
+  --wa-icon-strong: var(--c-text-strong);
+  --wa-accent: var(--c-brand);
+  --wa-accent-hover: var(--c-brand-hover);
+  --wa-accent-fg: var(--c-on-brand);
+  --wa-danger: var(--c-danger);
+  --wa-scroll-thumb: var(--c-scroll);
+  --wa-overlay: var(--c-overlay);
+
+  /* Navigation rail + mobile nav */
+  --wa-rail-bg: var(--c-rail);
+  --wa-rail-border: var(--c-border);
+  --wa-rail-icon: var(--c-text-strong);
+  --wa-rail-icon-active: var(--c-text);
+  --wa-rail-item-active: color-mix(in srgb, var(--c-text) 7%, var(--c-rail));
+  --wa-rail-item-hover: color-mix(in srgb, var(--c-text) 4%, var(--c-rail));
+  --wa-rail-divider: var(--c-border);
+  --wa-nav-bg: var(--c-surface);
+  --wa-nav-border: var(--c-border);
+  --wa-nav-text: var(--c-text);
+  --wa-nav-pill: var(--c-tint);
+
+  /* Sidebar */
+  --wa-sidebar-bg: var(--c-surface);
+  --wa-title: var(--c-brand);
+  --wa-header-icon: var(--c-text-strong);
+  --wa-fab-bg: var(--c-brand);
+  --wa-fab-hover: var(--c-brand-hover);
+  --wa-fab-fg: var(--c-on-brand);
+  --wa-search-bg: var(--c-search);
+  --wa-search-bg-focus: var(--c-surface);
+  --wa-search-border-focus: var(--c-brand);
+  --wa-search-icon: var(--c-text-strong);
+  --wa-search-text: var(--c-text);
+  --wa-search-placeholder: var(--c-text-soft);
+  --wa-chip-bg: var(--c-surface);
+  --wa-chip-border: var(--c-border-strong);
+  --wa-chip-text: var(--c-text-strong);
+  --wa-chip-hover: var(--c-hover);
+  --wa-chip-active-bg: var(--c-tint);
+  --wa-chip-active-border: var(--c-tint-border);
+  --wa-chip-active-text: var(--c-tint-text);
+  --wa-row-hover: var(--c-hover);
+  --wa-row-active: var(--c-selected);
+  --wa-time: var(--c-text-soft);
+  --wa-time-unread: var(--c-brand);
+  --wa-badge-bg: var(--c-brand);
+  --wa-badge-fg: var(--c-on-brand);
+  --wa-tick-read: var(--c-tick);
+  --wa-tick-sent: var(--c-text-soft);
+  --wa-preview-icon: var(--c-text-soft);
+  --wa-voice-icon: var(--c-brand);
+  --wa-presence: #25d366;
+  --wa-presence-ring: var(--c-surface);
+  --wa-avatar-bg: var(--c-tint);
+  --wa-avatar-fg: var(--c-brand);
+  --wa-avatar-neutral-bg: var(--c-border);
+  --wa-avatar-neutral-fg: var(--c-icon);
+  --wa-drawer-header-bg: var(--c-drawer);
+  --wa-drawer-header-fg: var(--c-on-drawer);
+
+  /* Chat panel */
+  --wa-chat-bg: var(--c-chat);
+  --wa-wallpaper-ink: var(--c-ink);
+  --wa-chat-header-bg: var(--c-surface);
+  --wa-chat-header-border: var(--c-border);
+  --wa-chat-header-icon: var(--c-text);
+  --wa-chat-title: var(--c-text);
+  --wa-chat-subtitle: var(--c-text-soft);
+  --wa-row-flash: color-mix(in srgb, var(--c-brand) 25%, transparent);
+
+  /* Bubbles */
+  --wa-bubble-out-bg: var(--c-bubble-out);
+  --wa-bubble-in-bg: var(--c-bubble-in);
+  --wa-bubble-text: var(--c-text);
+  --wa-bubble-meta: var(--c-text-soft);
+  --wa-bubble-overlay: var(--c-shade);
+  --wa-quote-mine-bar: var(--c-quote-mine);
+  --wa-quote-mine-text: var(--c-quote-mine);
+  --wa-quote-other-bar: var(--c-brand);
+  --wa-quote-other-text: var(--c-brand);
+  --wa-deleted-text: var(--c-text-soft);
+
+  /* Reactions + hover button */
+  --wa-reaction-bg: var(--c-surface);
+  --wa-reaction-border: var(--c-border);
+  --wa-reaction-mine-border: color-mix(in srgb, var(--c-brand) 55%, transparent);
+  --wa-reaction-text: var(--c-text-soft);
+  --wa-hoverbtn-bg: var(--c-surface);
+  --wa-hoverbtn-icon: var(--c-icon);
+
+  /* Composer */
+  --wa-composer-bg: var(--c-surface);
+  --wa-composer-icon: var(--c-text-strong);
+  --wa-composer-icon-active: var(--c-brand);
+  --wa-composer-text: var(--c-text);
+  --wa-composer-placeholder: var(--c-text-soft);
+  --wa-send-bg: var(--c-brand);
+  --wa-send-hover: var(--c-brand-hover);
+  --wa-send-fg: var(--c-on-brand);
+  --wa-recording: var(--c-danger);
+  --wa-wave: var(--c-brand);
+  --wa-progress-track: var(--c-border);
+  --wa-reply-bg: var(--c-surface);
+
+  /* Menus, modals, toast */
+  --wa-menu-bg: var(--c-surface);
+  --wa-menu-hover: var(--c-hover);
+  --wa-menu-text: var(--c-text);
+  --wa-menu-icon: var(--c-icon);
+  --wa-menu-divider: var(--c-border);
+  --wa-modal-bg: var(--c-surface);
+  --wa-modal-footer-bg: var(--c-surface-alt);
+  --wa-toast-bg: color-mix(in srgb, var(--c-text) 90%, transparent);
+  --wa-toast-fg: var(--c-surface);
+
+  /* Empty state ("Download WhatsApp") */
+  --wa-empty-bg: var(--c-app);
+  --wa-empty-title: var(--c-text-strong);
+  --wa-empty-text: var(--c-text-soft);
+  --wa-empty-border: var(--c-brand);
+  --wa-empty-art-frame: var(--c-border-strong);
+  --wa-empty-art-line: var(--c-border);
+  --wa-empty-art-phone: var(--c-text-strong);
+
+  /* Chat wallpaper doodles. Swap this url() for your own SVG/PNG to change
+     the pattern; only its shape is used, the color comes from --wa-wallpaper-ink */
+  --wa-wallpaper-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='30' cy='32' r='11'/%3E%3Cpath d='M25 32h10M30 27v10'/%3E%3Cpath d='M96 30c-7-9-22 0-13 11l13 13 13-13c9-11-6-20-13-11z'/%3E%3Cpath d='M166 18l5 11 12 2-9 8 3 12-11-6-11 6 3-12-9-8 12-2z'/%3E%3Crect x='20' y='88' width='32' height='23' rx='5'/%3E%3Ccircle cx='36' cy='99' r='6'/%3E%3Cpath d='M92 110a13 13 0 0 1 3-25 17 17 0 0 1 32 4 11 11 0 0 1-2 21z'/%3E%3Cpath d='M160 84v25M160 84l19-5v25'/%3E%3Ccircle cx='155' cy='109' r='5'/%3E%3Ccircle cx='174' cy='104' r='5'/%3E%3Ccircle cx='38' cy='168' r='15'/%3E%3Cpath d='M32 163h.1M44 163h.1M31 172c4 5 11 5 14 0'/%3E%3Cpath d='M92 150h30a5 5 0 0 1 5 5v15a5 5 0 0 1-5 5h-14l-9 9v-9h-7a5 5 0 0 1-5-5v-15a5 5 0 0 1 5-5z'/%3E%3Cpath d='M160 176l11-18 11 18z'/%3E%3Cpath d='M150 140c8-8 18-8 26 0'/%3E%3C/svg%3E");
+}
+
+/* ---------------------------- Helpers ---------------------------- */
+
+body {
+  font-family: var(--wa-font);
+  background: var(--wa-app-bg);
+  color: var(--wa-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wa-wallpaper {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--wa-wallpaper-ink);
+  -webkit-mask-image: var(--wa-wallpaper-mask);
+  mask-image: var(--wa-wallpaper-mask);
+  -webkit-mask-size: 220px 220px;
+  mask-size: 220px 220px;
+}
+
+.wa-shadow-bubble { box-shadow: 0 1px 0.5px var(--c-shadow); }
+.wa-shadow-float  { box-shadow: 0 1px 3px var(--c-shadow); }
+.wa-shadow-menu   { box-shadow: 0 4px 20px var(--c-shadow); }
+.wa-shadow-modal  { box-shadow: 0 12px 40px var(--c-shadow); }
+
+.whatsapp-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--wa-scroll-thumb) transparent;
+}
+.whatsapp-scrollbar::-webkit-scrollbar { width: 6px; }
+.whatsapp-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.whatsapp-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--wa-scroll-thumb);
+  border-radius: 3px;
+}
