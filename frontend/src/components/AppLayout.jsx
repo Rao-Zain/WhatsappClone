@@ -1,0 +1,664 @@
+
+import { useEffect, useState } from "react";
+
+import api from "../../lib/api";
+import { getSocket } from "../../lib/socket";
+import NavigationRail from "./layout/NavigationRail";
+import Sidebar from "./sidebar/Sidebar";
+import ChatWindow from "./chat/ChatWindow";
+import { useAuth } from "../context/AuthContext";
+import { useCallback } from "react";
+import { PresenceProvider } from "../context/PresenceContext";
+import useCall from "../hooks/useCall";
+import CallOverlay from "../components/call/CallOverlay";
+import useAppSounds from "../hooks/useAppSounds";
+import {
+  requestNotificationPermission,
+  showNotification,
+  isAppActive,
+} from "../../lib/notifications";
+// Inside AppLayout:
+
+
+
+function getCurrentUser() {
+  try {
+    const storedUser =
+      localStorage.getItem("user") ||
+      sessionStorage.getItem("user");
+
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+function getCurrentUserId() {
+  const user = getCurrentUser();
+  return user?._id || user?.id || null;
+}
+
+function formatTime(date) {
+  if (!date) return "";
+
+  const messageDate = new Date(date);
+
+  if (Number.isNaN(messageDate.getTime())) return "";
+
+  const now = new Date();
+
+  if (messageDate.toDateString() === now.toDateString()) {
+    return messageDate.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+
+  if (messageDate.toDateString() === yesterday.toDateString()) {
+    return "Yesterday";
+  }
+
+  return messageDate.toLocaleDateString([], {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function formatConversation(conversation, currentUserId) {
+  const participants = conversation.participants || [];
+
+  const otherParticipant = participants.find(
+    (participant) =>
+      String(participant._id || participant.id || participant) !==
+      String(currentUserId)
+  );
+
+  const lastMessage = conversation.lastMessage;
+
+  const isGroup = conversation.type === "group";
+
+  const senderId = lastMessage?.sender?._id ||
+    lastMessage?.sender?.id ||
+    lastMessage?.sender;
+
+  return {
+    id: String(conversation._id || conversation.id),
+    name: isGroup
+      ? conversation.groupName || "Unnamed group"
+      : otherParticipant?.name?.trim() ||
+      otherParticipant?.username ||
+      "Unknown user",
+    avatar: isGroup
+      ? conversation.groupPicture || ""
+      : otherParticipant?.profilePicture || "",
+    time: formatTime(
+      lastMessage?.createdAt || conversation.updatedAt
+    ),
+    message: lastMessage?.deletedForEveryone
+      ? "This message was deleted"
+      : lastMessage?.text || "No messages yet",
+
+    username: isGroup ? "" : otherParticipant?.username || "",
+    userId: isGroup
+      ? ""
+      : String(otherParticipant?._id || otherParticipant?.id || ""),
+    isOnline: isGroup ? false : Boolean(otherParticipant?.isOnline),
+    lastSeen: isGroup ? null : otherParticipant?.lastSeen || null,
+
+    unread: Number(conversation.unreadCount || 0),
+
+    type: isGroup ? "group" : "personal",
+    favorite: false,
+    sent: senderId
+      ? String(senderId) === String(currentUserId)
+      : false,
+  };
+}
+
+export default function AppLayout() {
+  const [chats, setChats] = useState([]);
+  const [selectedChatId, setSelectedChatId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [isNewChat, setIsNewChat] = useState(false);
+  const [creatingConversation, setCreatingConversation] =
+    useState(false);
+  const [actionError, setActionError] = useState("");
+  const { user, setUser } = useAuth();
+  const [searchQuery, setSearchQuery] = useState("");
+  const socket = getSocket();
+  const call = useCall(socket);
+
+
+  const { playRingtone, stopRingtone, playRingback, stopRingback, playMessage } =
+    useAppSounds();
+
+  // Ask for notification permission on the first click (browsers require a gesture).
+  // use-sound / Howler unlocks audio on its own, so nothing is needed for sound.
+  useEffect(() => {
+    function onFirstInteraction() {
+      requestNotificationPermission();
+      window.removeEventListener("pointerdown", onFirstInteraction);
+      window.removeEventListener("keydown", onFirstInteraction);
+    }
+    window.addEventListener("pointerdown", onFirstInteraction);
+    window.addEventListener("keydown", onFirstInteraction);
+    return () => {
+      window.removeEventListener("pointerdown", onFirstInteraction);
+      window.removeEventListener("keydown", onFirstInteraction);
+    };
+  }, []);
+
+
+
+  useEffect(() => {
+    if (call.callState === "incoming") {
+      playRingtone();
+
+      const notification = !isAppActive()
+        ? showNotification(getCallTitle(call.callInfo.conversationId), {
+          body: `Incoming ${call.callInfo.type} call`,
+          tag: "incoming-call",
+          requireInteraction: true,
+        })
+        : null;
+
+      // Runs when the call is answered, declined, or ended
+      return () => {
+        stopRingtone();
+        notification?.close();
+      };
+    }
+
+    if (call.callState === "outgoing") {
+      playRingback();
+      return () => stopRingback();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [call.callState, call.callInfo?.conversationId]);
+
+  const getCallTitle = (conversationId) =>
+    chats.find((c) => c.id === String(conversationId))?.name || "Unknown";
+
+  // Name of a participant inside the call grid
+  const getUserName = (userId) =>
+    chats.find((c) => c.userId === String(userId))?.name || "Participant";
+  // Load the existing conversations when the layout opens.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadConversations() {
+      try {
+        setIsLoading(true);
+        setError("");
+
+        const response = await api.get("/conversations");
+        const currentUserId = getCurrentUserId();
+
+        const conversations = response.data.conversations || [];
+
+        const formattedChats = conversations.map((conversation) =>
+          formatConversation(conversation, currentUserId)
+        );
+
+        if (cancelled) return;
+
+        setChats((previousChats) => {
+          // Preserve unread counts if a conversation was updated
+          // while the initial request was still loading.
+          return formattedChats.map((chat) => {
+            const existing = previousChats.find(
+              (previous) => previous.id === chat.id
+            );
+
+            return existing
+              ? { ...chat, unread: existing.unread }
+              : chat;
+          });
+        });
+
+        setSelectedChatId((previousId) => {
+          if (
+            previousId &&
+            formattedChats.some((chat) => chat.id === previousId)
+          ) {
+            return previousId;
+          }
+
+          return formattedChats[0]?.id ?? null;
+        });
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err.response?.data?.message ||
+            "Unable to load conversations. Please try again."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadConversations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleConversationRead = useCallback((conversationId) => {
+    setChats((previous) =>
+      previous.map((chat) =>
+        chat.id === conversationId
+          ? { ...chat, unread: 0 }
+          : chat
+      )
+    );
+  }, []);
+
+  // Listen for incoming messages globally, not just in ChatWindow.
+  useEffect(() => {
+    const socket = getSocket();
+
+    function handleNewMessage(message) {
+      const conversationId = String(
+        message.conversation?._id || message.conversation
+      );
+
+      if (!conversationId || conversationId === "undefined") {
+        return;
+      }
+
+      const currentUserId = getCurrentUserId();
+
+      const senderId = String(
+        message.sender?._id ||
+        message.sender?.id ||
+        message.sender
+      );
+
+      const isOwnMessage =
+        senderId === String(currentUserId);
+
+      const isSelectedConversation =
+        String(selectedChatId) === conversationId;
+
+      if (!isOwnMessage) {
+        const active = isAppActive();
+
+        // Play a sound unless the user is already reading this chat
+        if (!(active && isSelectedConversation)) {
+          playMessage();
+        }
+
+        // Desktop notification only when the app isn't in front
+        if (!active) {
+          const senderName =
+            message.sender?.name || message.sender?.username || "New message";
+
+          showNotification(senderName, {
+            body: message.text || "Sent an attachment",
+            tag: `chat-${conversationId}`,
+            onClick: () => handleSelectChat(conversationId),
+          });
+        }
+      }
+
+
+      // Update the sidebar immediately if this conversation
+      // is already in the list.
+      let conversationExists = false;
+
+      setChats((previousChats) => {
+        conversationExists = previousChats.some(
+          (chat) => chat.id === conversationId
+        );
+
+        if (!conversationExists) {
+          // The recipient has never opened this conversation.
+          // Fetch the conversations so we can get the other
+          // participant's name and profile picture.
+          return previousChats;
+        }
+
+        const updatedChats = previousChats.map((chat) => {
+          if (chat.id !== conversationId) return chat;
+
+          return {
+            ...chat,
+            message: message.text || chat.message,
+            time: formatTime(message.createdAt),
+            sent: isOwnMessage,
+            unread:
+              !isOwnMessage && !isSelectedConversation
+                ? (chat.unread || 0) + 1
+                : chat.unread || 0,
+          };
+        });
+
+        // Most recently active conversations appear first.
+        const updatedChat = updatedChats.find(
+          (chat) => chat.id === conversationId
+        );
+
+        return [
+          updatedChat,
+          ...updatedChats.filter(
+            (chat) => chat.id !== conversationId
+          ),
+        ];
+      });
+
+      // If this is a brand-new conversation for this recipient,
+      // retrieve its participant details and add it automatically.
+      if (!conversationExists) {
+        api
+          .get("/conversations")
+          .then((response) => {
+            const conversations =
+              response.data.conversations || [];
+
+            const conversation = conversations.find(
+              (item) =>
+                String(item._id) === conversationId
+            );
+
+            if (!conversation) return;
+
+            const formattedChat = formatConversation(
+              conversation,
+              currentUserId
+            );
+
+            setChats((previousChats) => {
+              const existing = previousChats.find(
+                (chat) => chat.id === conversationId
+              );
+
+              if (existing) {
+                // Another message may have arrived while the
+                // conversation request was in progress.
+                return previousChats;
+              }
+
+              return [
+                {
+                  ...formattedChat,
+                  message: message.text || formattedChat.message,
+                  time: formatTime(message.createdAt),
+                  sent: isOwnMessage,
+                  unread:
+                    !isOwnMessage &&
+                      !isSelectedConversation
+                      ? 1
+                      : 0,
+                },
+                ...previousChats,
+              ];
+            });
+          })
+          .catch((err) => {
+            console.error(
+              "Unable to refresh conversations:",
+              err
+            );
+          });
+      }
+    }
+
+    function handleDeleted({ conversationId, isLastMessage }) {
+      if (!isLastMessage) return;
+
+      setChats((previousChats) =>
+        previousChats.map((chat) =>
+          chat.id === String(conversationId)
+            ? { ...chat, message: "This message was deleted" }
+            : chat
+        )
+      );
+    }
+
+    socket.on("message:new", handleNewMessage);
+    socket.on("message:deleted", handleDeleted);
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    return () => {
+      socket.off("message:new", handleNewMessage);
+      socket.off("message:deleted", handleDeleted);
+    };
+  }, [selectedChatId, playMessage]);
+
+  // Clear unread messages as soon as the user opens a conversation.
+  function handleSelectChat(chatId) {
+    const id = String(chatId);
+
+    setSelectedChatId(id);
+
+    setChats((previousChats) =>
+      previousChats.map((chat) =>
+        chat.id === id
+          ? { ...chat, unread: 0 }
+          : chat
+      )
+    );
+  }
+
+  async function handleSelectNewChatUser(user) {
+    if (creatingConversation) return;
+
+    try {
+      setCreatingConversation(true);
+      setActionError("");
+
+      const response = await api.post("/conversations", {
+        participantId: user._id,
+      });
+
+      const conversation = response.data.conversation;
+      const currentUserId = getCurrentUserId();
+
+      const formattedChat = formatConversation(
+        conversation,
+        currentUserId
+      );
+
+      setChats((previousChats) => {
+        const existing = previousChats.find(
+          (chat) => chat.id === formattedChat.id
+        );
+
+        const chatToUse = existing
+          ? { ...formattedChat, unread: existing.unread }
+          : formattedChat;
+
+        return [
+          chatToUse,
+          ...previousChats.filter(
+            (chat) => chat.id !== formattedChat.id
+          ),
+        ];
+      });
+
+      handleSelectChat(formattedChat.id);
+      setIsNewChat(false);
+    } catch (err) {
+      setActionError(
+        err.response?.data?.message ||
+        "Unable to start this conversation. Please try again."
+      );
+    } finally {
+      setCreatingConversation(false);
+    }
+  }
+
+  const selectedChat =
+    chats.find((chat) => chat.id === selectedChatId) || null;
+
+  const filteredChats = chats.filter((chat) => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) return true;
+
+    return (
+      (chat.name || "").toLowerCase().includes(query) ||
+      (chat.username || "").toLowerCase().includes(query) ||
+      (chat.message || "").toLowerCase().includes(query)
+    );
+  });
+
+  const handleMessageSent = (conversationId, latestMessage) => {
+    setChats((prevChats) =>
+      prevChats.map((c) => {
+        const currentId = String(c.id || c._id);
+        if (currentId === String(conversationId)) {
+          return {
+            ...c,
+            lastMessage: latestMessage,
+            message: latestMessage.text || "",
+            attachments: latestMessage.attachments || [],
+            time: latestMessage.time,
+          };
+        }
+        return c;
+      })
+    );
+  };
+
+  const handleMessageStatusChange = useCallback(
+    (conversationId, status, messageIds = []) => {
+      const changedMessageIds = new Set(messageIds.map(String));
+
+      setChats((previousChats) =>
+        previousChats.map((chat) => {
+          if (chat.id !== String(conversationId)) return chat;
+
+          const lastMessage = chat.lastMessage;
+          if (!lastMessage || !(chat.sent || lastMessage.sender === "me")) {
+            return chat;
+          }
+
+          const lastMessageId = String(lastMessage.id || lastMessage._id || "");
+          if (changedMessageIds.size && !changedMessageIds.has(lastMessageId)) {
+            return chat;
+          }
+
+          return {
+            ...chat,
+            lastMessage: { ...lastMessage, status },
+            status,
+          };
+        })
+      );
+    },
+    []
+  );
+
+  return (
+    <PresenceProvider>
+      <div className="flex h-full min-h-0 w-full overflow-hidden">
+        <NavigationRail
+          profileImage={user?.profilePicture}
+          about={user?.about || ""}
+          userId={user?.id || user?._id}
+          onDismissAbout={() => {
+            setUser((previous) =>
+              previous ? { ...previous, aboutBubbleDismissed: true } : previous
+            );
+          }}
+        />
+
+        <div className="relative flex w-[410px] min-w-[340px] shrink-0 flex-col max-[700px]:w-[calc(100%-65px)] max-[700px]:min-w-0">
+          <Sidebar
+            chats={filteredChats}
+            selectedChatId={selectedChatId}
+            onSelectChat={handleSelectChat}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            isNewChat={isNewChat}
+            onNewChat={() => {
+              setActionError("");
+              setIsNewChat(true);
+            }}
+            onBackFromNewChat={() => setIsNewChat(false)}
+            onSelectNewChatUser={handleSelectNewChatUser}
+          />
+
+          {creatingConversation && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 text-sm text-[#667781]">
+              Starting conversation...
+            </div>
+          )}
+
+          {actionError && (
+            <div
+              role="alert"
+              className="absolute inset-x-3 top-20 z-30 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+            >
+              {actionError}
+
+              <button
+                type="button"
+                onClick={() => setActionError("")}
+                className="ml-2 font-semibold underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="absolute inset-x-0 bottom-0 z-10 bg-white/90 p-3 text-center text-sm text-[#667781]">
+              Loading conversations...
+            </div>
+          )}
+
+          {error && (
+            <div
+              role="alert"
+              className="absolute inset-x-3 bottom-3 z-30 rounded-lg bg-red-50 p-3 text-sm text-red-700"
+            >
+              {error}
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="ml-2 font-semibold underline"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+        </div>
+
+        <main className="min-w-0 flex-1 max-[700px]:hidden">
+          {/* <ChatWindow chat={selectedChat} onConversationRead={(id) => setChats((previous) => previous.map((item) => item.id === id ? { ...item, unread: 0 } : item))} /> */}
+          {/* <ChatWindow chat={selectedChat} chats={chats} onConversationRead={handleConversationRead} /> */}
+          <ChatWindow
+            chat={selectedChat}
+            chats={chats}
+            onConversationRead={handleConversationRead}
+            // onBack={handleBack}
+            onMessageSent={handleMessageSent} // <-- Add this prop here
+            onMessageStatusChange={handleMessageStatusChange}
+            onStartCall={call.startCall}
+          />
+
+        </main>
+
+      </div>
+
+      <CallOverlay
+        call={call}
+        getUserName={getUserName}
+        getCallTitle={getCallTitle}
+      />
+    </PresenceProvider>
+  );
+}
