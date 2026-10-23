@@ -6,6 +6,7 @@ export default function MessageList({
   currentUserId,
   onOpenMenu,
   onMediaClick,
+  isGroup = false,
 }) {
   const bottomRef = useRef(null);
   const highlightTimer = useRef(null);
@@ -39,15 +40,35 @@ export default function MessageList({
       <div className="flex min-h-full flex-col justify-end px-[4%] py-4 sm:px-[7%]">
         {messages.map((message, index) => {
           const previous = messages[index - 1];
-          // Same sender as the message above: tight spacing and no bubble tail.
-          const grouped = Boolean(previous) && previous.sender === message.sender;
 
+          // Group notices such as "Ali added Sara" sit in the middle as a small pill.
+          if (message.type === "system") {
+            return (
+              <div
+                key={message.id}
+                className={`flex justify-center ${index === 0 ? "" : "mt-3"}`}
+              >
+                <span className="max-w-[85%] rounded-lg bg-[var(--wa-chip-bg)] px-3 py-1 text-center text-[12.5px] leading-[19px] text-[color:var(--wa-chip-text)] shadow-sm">
+                  {message.text}
+                </span>
+              </div>
+            );
+          }
+
+          // Same sender as the message above: tight spacing and no bubble tail.
+          const grouped =
+            Boolean(previous) &&
+            previous.type !== "system" &&
+            (previous.senderId && message.senderId
+              ? previous.senderId === message.senderId
+              : previous.sender === message.sender);
           return (
             <MessageRow
               key={message.id}
               message={message}
               currentUserId={currentUserId}
               grouped={grouped}
+                            showSender={isGroup && message.sender === "other" && !grouped}
               className={index === 0 ? "" : grouped ? "mt-[3px]" : "mt-3"}
               highlighted={highlightedId === message.id}
               onOpenMenu={onOpenMenu}

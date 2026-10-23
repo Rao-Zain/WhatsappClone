@@ -4,6 +4,15 @@ import api from "../../../lib/api";
 import QuotedMessage from "./QuotedMessage";
 import VoiceNotePlayer from "./VoiceNotePlayer";
 
+
+// A stable colour per sender so each person is easy to tell apart in a group.
+function senderColor(id = "") {
+  let hash = 0;
+  for (const char of String(id)) hash = (hash * 31 + char.charCodeAt(0)) % 360;
+  return `hsl(${hash} 55% 48%)`;
+}
+
+
 function formatSize(bytes = 0) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -21,6 +30,7 @@ function formatMessageTime(date) {
 export default function MessageBubble({
   message,
   showTail = true,
+  showSender = false,
   onJumpToMessage,
   onOpenMenu,
   onMediaClick,
@@ -155,6 +165,15 @@ export default function MessageBubble({
         >
           <ChevronDown size={20} strokeWidth={2} />
         </button>
+      )}
+
+            {showSender && message.senderName && (
+        <p
+          className="mb-0.5 truncate px-1 text-[12.8px] font-medium leading-[18px]"
+          style={{ color: senderColor(message.senderId) }}
+        >
+          {message.senderName}
+        </p>
       )}
 
       {message.forwarded && (

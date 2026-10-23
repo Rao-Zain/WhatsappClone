@@ -74,6 +74,111 @@ export async function createConversation(req, res) {
   }
 }
 
+// POST /api/conversations/group
+export async function createGroup(req, res) {
+  try {
+    const { name, participantIds } = req.body;
+    const creatorId = String(req.user._id);
+
+    const groupName = typeof name === "string" ? name.trim() : "";
+
+    if (!groupName) {
+      return res.status(400).json({
+        success: false,
+        message: "Group name is required.",
+      });
+    }
+
+    if (groupName.length > 50) {
+      return res.status(400).json({
+        success: false,
+        message: "Group name cannot exceed 50 characters.",
+      });
+    }
+
+    if (!Array.isArray(participantIds)) {
+      return res.status(400).json({
+        success: false,
+        message: "Choose at least one member.",
+      });
+    }
+
+    // Remove duplicates and the creator (they are added automatically).
+    const memberIds = [...new Set(participantIds.map(String))].filter(
+      (id) => id !== creatorId
+    );
+
+    if (memberIds.some((id) => !mongoose.isValidObjectId(id))) {
+      return res.status(400).json({
+        success: false,
+        message: "One or more member IDs are invalid.",
+      });
+    }
+
+    if (memberIds.length < 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Add at least one other member.",
+      });
+    }
+
+    if (memberIds.length > 255) {
+      return res.status(400).json({
+        success: false,
+        message: "A group can have at most 256 members.",
+      });
+    }
+
+    const members = await User.find({
+      _id: { $in: memberIds },
+      emailVerified: true,
+    }).select("_id");
+
+    if (members.length !== memberIds.length) {
+      return res.status(404).json({
+        success: false,
+        message: "One or more users were not found.",
+      });
+    }
+
+    const created = await Conversation.create({
+      type: "group",
+      groupName,
+      participants: [req.user._id, ...members.map((member) => member._id)],
+      admins: [req.user._id],
+    });
+
+    const conversation = await Conversation.findById(created._id)
+      .populate(
+        "participants",
+        "name username profilePicture about isOnline lastSeen"
+      )
+      .populate("lastMessage");
+
+    // Show the new group in every member's sidebar immediately.
+    const io = req.app.get("io");
+    const payload = { ...conversation.toObject(), unreadCount: 0 };
+
+    for (const member of conversation.participants) {
+      if (String(member._id) === creatorId) continue;
+
+      io?.to(`user:${String(member._id)}`).emit("conversation:new", payload);
+    }
+
+    return res.status(201).json({
+      success: true,
+      conversation,
+    });
+  } catch (error) {
+    console.error("Create group error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to create the group.",
+    });
+  }
+}
+
 
  // GET /api/conversations/search-users?phone=...
 export async function searchUsersByPhone(req, res) {
@@ -96,7 +201,7 @@ export async function searchUsersByPhone(req, res) {
       phone,
       _id: { $ne: req.user._id },
       emailVerified: true,
-    }).select("_id username phone profilePicture about");
+    }).select("_id name  username phone profilePicture about");
 
     return res.status(200).json({
       success: true,
@@ -130,7 +235,7 @@ export async function getConversations(req, res) {
         path: "lastMessage",
         populate: {
           path: "sender",
-          select: "username profilePicture",
+          select: "name username profilePicture",
         },
       })
       .sort({ updatedAt: -1 });
@@ -197,26 +302,53 @@ export async function markConversationRead(req, res) {
     }
 
     // Only mark messages sent by other participants as read.
+        const isGroup = conversation.type === "group";
+
+    // Only mark messages sent by other participants as read.
+    // In a group, a message only gets blue ticks once EVERY member has read it.
     await Message.updateMany(
       {
         conversation: conversation._id,
         sender: { $ne: currentUserId },
         readBy: { $ne: currentUserId },
       },
-      {
-        $addToSet: { readBy: currentUserId },
-        $set: { status: "read" },
-      }
+      isGroup
+        ? { $addToSet: { readBy: currentUserId } }
+        : { $addToSet: { readBy: currentUserId }, $set: { status: "read" } }
     );
 
-    const io = req.app.get("io");
-    for (const participantId of conversation.participants) {
-      if (String(participantId) === String(currentUserId)) continue;
+    let fullyReadIds = [];
 
-      io?.to(`user:${String(participantId)}`).emit("messages:read", {
-        conversationId: String(conversation._id),
-        readBy: String(currentUserId),
-      });
+    if (isGroup) {
+      const fullyRead = await Message.find({
+        conversation: conversation._id,
+        status: { $ne: "read" },
+        readBy: { $all: [...conversation.participants] },
+      }).select("_id");
+
+      fullyReadIds = fullyRead.map((message) => String(message._id));
+
+      if (fullyReadIds.length) {
+        await Message.updateMany(
+          { _id: { $in: fullyReadIds } },
+          { $set: { status: "read" } }
+        );
+      }
+    }
+
+    const io = req.app.get("io");
+
+    if (!isGroup || fullyReadIds.length) {
+      for (const participantId of conversation.participants) {
+        if (String(participantId) === String(currentUserId)) continue;
+
+        io?.to(`user:${String(participantId)}`).emit("messages:read", {
+          conversationId: String(conversation._id),
+          readBy: String(currentUserId),
+          // Groups: only these messages became fully read.
+          ...(isGroup ? { messageIds: fullyReadIds } : {}),
+        });
+      }
     }
 
     return res.status(200).json({

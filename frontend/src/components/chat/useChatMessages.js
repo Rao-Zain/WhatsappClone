@@ -41,6 +41,7 @@ export function formatMessage(message, currentUserId) {
     attachments: message.attachments || [],
     time: formatMessageTime(message.createdAt),
     sender: String(senderId) === String(currentUserId) ? "me" : "other",
+    senderId: String(senderId),
     senderName: message.sender?.name?.trim() || message.sender?.username || "",
     senderAvatar: message.sender?.avatar || message.sender?.profilePicture || null,
     createdAt: message.createdAt,
@@ -218,11 +219,21 @@ export function useChatMessages({
     }
 
     // Double Blue Tick Listener
-    function handleRead(payload) {
+       function handleRead(payload) {
       if (String(payload.conversationId) !== conversationId) return;
-      onMessageStatusChange?.(conversationId, "read");
+
+      // Groups send only the messages that EVERY member has now read.
+      const readIds = payload.messageIds
+        ? new Set(payload.messageIds.map(String))
+        : null;
+
+      onMessageStatusChange?.(conversationId, "read", payload.messageIds || []);
       setMessages((prev) =>
-        prev.map((m) => (m.sender === "me" ? { ...m, status: "read" } : m))
+        prev.map((m) =>
+          m.sender === "me" && (!readIds || readIds.has(m.id))
+            ? { ...m, status: "read" }
+            : m
+        )
       );
     }
 

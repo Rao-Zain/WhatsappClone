@@ -14,6 +14,7 @@ export default function MessageRow({
   currentUserId,
   highlighted,
   grouped = false,
+  showSender = false,
   className = "",
   onOpenMenu,
   onJumpToMessage,
@@ -87,6 +88,7 @@ export default function MessageRow({
             <MessageBubble
               message={message}
               showTail={!grouped}
+                            showSender={showSender}
               onJumpToMessage={onJumpToMessage}
               onOpenMenu={onOpenMenu}
               onMediaClick={onMediaClick}

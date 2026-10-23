@@ -67,6 +67,18 @@ function formatTime(date) {
   });
 }
 
+// Text shown under a chat name. In groups, incoming messages get the sender's name.
+function getPreview(isGroup, message, isOwnMessage, fallback) {
+  if (!message.text) return fallback;
+    if (message.type === "system") return message.text;
+  if (!isGroup || isOwnMessage) return message.text;
+
+  const senderName =
+    message.sender?.name?.trim() || message.sender?.username || "Someone";
+
+  return `${senderName}: ${message.text}`;
+}
+
 function formatConversation(conversation, currentUserId) {
   const participants = conversation.participants || [];
 
@@ -79,6 +91,9 @@ function formatConversation(conversation, currentUserId) {
   const lastMessage = conversation.lastMessage;
 
   const isGroup = conversation.type === "group";
+    const adminIds = isGroup
+    ? (conversation.admins || []).map((admin) => String(admin._id || admin.id || admin))
+    : [];
 
   const senderId = lastMessage?.sender?._id ||
     lastMessage?.sender?.id ||
@@ -97,9 +112,15 @@ function formatConversation(conversation, currentUserId) {
     time: formatTime(
       lastMessage?.createdAt || conversation.updatedAt
     ),
-    message: lastMessage?.deletedForEveryone
+     message: lastMessage?.deletedForEveryone
       ? "This message was deleted"
-      : lastMessage?.text || "No messages yet",
+      : lastMessage?.type === "system"
+        ? lastMessage.text
+        : lastMessage?.text
+          ? isGroup && senderId && String(senderId) !== String(currentUserId)
+            ? `${lastMessage.sender?.name?.trim() || lastMessage.sender?.username || "Someone"}: ${lastMessage.text}`
+            : lastMessage.text
+          : "No messages yet",
 
     username: isGroup ? "" : otherParticipant?.username || "",
 
@@ -112,13 +133,47 @@ function formatConversation(conversation, currentUserId) {
     isOnline: isGroup ? false : Boolean(otherParticipant?.isOnline),
     lastSeen: isGroup ? null : otherParticipant?.lastSeen || null,
 
+     // Group info (empty for private chats)
+    adminIds,
+    isAdmin: adminIds.includes(String(currentUserId)),
+    members: isGroup
+      ? participants.map((participant) => {
+          const id = String(participant._id || participant.id || participant);
+
+          return {
+            id,
+            name:
+              participant.name?.trim() || participant.username || "Unknown user",
+            avatar: participant.profilePicture || "",
+            about: participant.about || "",
+            isAdmin: adminIds.includes(id),
+          };
+        })
+      : [],
+    memberNames: isGroup
+      ? [
+          ...participants
+            .filter(
+              (participant) =>
+                String(participant._id || participant.id || participant) !==
+                String(currentUserId)
+            )
+            .map(
+              (participant) =>
+                participant.name?.trim() || participant.username || "Unknown"
+            ),
+          "You",
+        ].join(", ")
+      : "",
+
     unread: Number(conversation.unreadCount || 0),
 
     type: isGroup ? "group" : "personal",
     favorite: false,
-    sent: senderId
-      ? String(senderId) === String(currentUserId)
-      : false,
+        sent:
+      senderId && lastMessage?.type !== "system"
+        ? String(senderId) === String(currentUserId)
+        : false,
   };
 }
 
@@ -135,6 +190,7 @@ export default function AppLayout() {
   const [searchQuery, setSearchQuery] = useState("");
   const socket = getSocket();
   const call = useCall(socket);
+    const [isNewGroup, setIsNewGroup] = useState(false);
 
 
   const { playRingtone, stopRingtone, playRingback, stopRingback, playMessage } =
@@ -187,10 +243,12 @@ export default function AppLayout() {
   const getCallTitle = (conversationId) =>
     chats.find((c) => c.id === String(conversationId))?.name || "Unknown";
 
-  // Name of a participant inside the call grid
-  const getUserName = (userId) =>
-    chats.find((c) => c.userId === String(userId))?.name || "Participant";
-
+    const getUserName = (userId) =>
+    chats.find((c) => c.userId === String(userId))?.name ||
+    chats
+      .flatMap((c) => c.members || [])
+      .find((member) => member.id === String(userId))?.name ||
+    "Participant";
 
   // Photo for the ringing screen (personal chat photo or group picture)
 const getCallAvatar = (conversationId) =>
@@ -302,7 +360,7 @@ const getUserAvatar = (userId) =>
       const isSelectedConversation =
         String(selectedChatId) === conversationId;
 
-      if (!isOwnMessage) {
+      if (!isOwnMessage && message.type !== "system") {
         const active = isAppActive();
 
         // Play a sound unless the user is already reading this chat
@@ -345,11 +403,13 @@ const getUserAvatar = (userId) =>
 
           return {
             ...chat,
-            message: message.text || chat.message,
+           message: getPreview(chat.type === "group", message, isOwnMessage, chat.message),
             time: formatTime(message.createdAt),
-            sent: isOwnMessage,
+            sent: message.type === "system" ? false : isOwnMessage,
             unread:
-              !isOwnMessage && !isSelectedConversation
+              !isOwnMessage &&
+              !isSelectedConversation &&
+              message.type !== "system"
                 ? (chat.unread || 0) + 1
                 : chat.unread || 0,
           };
@@ -403,7 +463,7 @@ const getUserAvatar = (userId) =>
               return [
                 {
                   ...formattedChat,
-                  message: message.text || formattedChat.message,
+                 message: getPreview(formattedChat.type === "group", message, isOwnMessage, formattedChat.message),
                   time: formatTime(message.createdAt),
                   sent: isOwnMessage,
                   unread:
@@ -501,6 +561,66 @@ const getUserAvatar = (userId) =>
   }, [setUser]);
 
 
+  // A group changed (name, photo, members, admins): refresh it in the sidebar.
+  // Unread counts and the last-message preview are kept as they are.
+  const applyConversationUpdate = useCallback((conversation) => {
+    const formatted = formatConversation(conversation, getCurrentUserId());
+
+    setChats((previousChats) =>
+      previousChats.map((chat) =>
+        chat.id !== formatted.id
+          ? chat
+          : {
+              ...chat,
+              name: formatted.name,
+              avatar: formatted.avatar,
+              members: formatted.members,
+              memberNames: formatted.memberNames,
+              adminIds: formatted.adminIds,
+              isAdmin: formatted.isAdmin,
+            }
+      )
+    );
+  }, []);
+
+  // Live group events: a new group, group changes, and being removed from one.
+  useEffect(() => {
+    const socket = getSocket();
+
+    function handleConversationNew(conversation) {
+      const formatted = formatConversation(conversation, getCurrentUserId());
+
+      setChats((previousChats) =>
+        previousChats.some((chat) => chat.id === formatted.id)
+          ? previousChats
+          : [formatted, ...previousChats]
+      );
+    }
+
+    function handleConversationRemoved({ conversationId }) {
+      const id = String(conversationId);
+
+      setChats((previousChats) =>
+        previousChats.filter((chat) => chat.id !== id)
+      );
+      setSelectedChatId((current) => (current === id ? null : current));
+    }
+
+    socket.on("conversation:new", handleConversationNew);
+    socket.on("conversation:updated", applyConversationUpdate);
+    socket.on("conversation:removed", handleConversationRemoved);
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    return () => {
+      socket.off("conversation:new", handleConversationNew);
+      socket.off("conversation:updated", applyConversationUpdate);
+      socket.off("conversation:removed", handleConversationRemoved);
+    };
+  }, [applyConversationUpdate]);
+
 
   // Clear unread messages as soon as the user opens a conversation.
   function handleSelectChat(chatId) {
@@ -563,6 +683,36 @@ const getUserAvatar = (userId) =>
     } finally {
       setCreatingConversation(false);
     }
+  }
+
+    // I exited a group from the info panel.
+  function handleGroupLeft(conversationId) {
+    const id = String(conversationId);
+
+    setChats((previousChats) => previousChats.filter((chat) => chat.id !== id));
+    setSelectedChatId((current) => (current === id ? null : current));
+  }
+
+
+    // Throws on failure so the New group screen can show the error.
+  async function handleCreateGroup(name, participantIds) {
+    const response = await api.post("/conversations/group", {
+      name,
+      participantIds,
+    });
+
+    const formattedChat = formatConversation(
+      response.data.conversation,
+      getCurrentUserId()
+    );
+
+    setChats((previousChats) => [
+      formattedChat,
+      ...previousChats.filter((chat) => chat.id !== formattedChat.id),
+    ]);
+
+    handleSelectChat(formattedChat.id);
+    setIsNewGroup(false);
   }
 
   const selectedChat =
@@ -646,6 +796,13 @@ const getUserAvatar = (userId) =>
             chats={filteredChats}
             selectedChatId={selectedChatId}
             onSelectChat={handleSelectChat}
+             isNewGroup={isNewGroup}
+            onNewGroup={() => {
+              setActionError("");
+              setIsNewGroup(true);
+            }}
+            onBackFromNewGroup={() => setIsNewGroup(false)}
+            onCreateGroup={handleCreateGroup}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             isNewChat={isNewChat}
@@ -714,6 +871,8 @@ const getUserAvatar = (userId) =>
             onMessageSent={handleMessageSent} // <-- Add this prop here
             onMessageStatusChange={handleMessageStatusChange}
             onStartCall={call.startCall}
+                        onGroupUpdated={applyConversationUpdate}
+            onGroupLeft={handleGroupLeft}
           />
 
         </main>

@@ -9,6 +9,8 @@ import initializeSocket, { resetPresence } from "./socket/socket.js";
 import authRoutes from "./routes/authRoutes.js";
 import conversationRoutes from "./routes/conversationRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
+import path from "path";
+import { avatarDirectory } from "./utils/avatarStorage.js";
 
 dotenv.config();
 
@@ -26,6 +28,12 @@ app.use(
 
 // Allow small, cropped profile photos in JSON requests.
 app.use(express.json({ limit: "2mb" }));
+
+// Public profile pictures only. Chat attachments stay private.
+app.use(
+  "/uploads/avatars",
+  express.static(avatarDirectory, { maxAge: "7d", immutable: true })
+);
 
 // API routes
 app.use("/api/auth", authRoutes);

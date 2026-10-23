@@ -63,7 +63,7 @@ export default function ChatHeader({ chat, onBack, onOpenInfo, onStartCall  }) {
                 />
               ) : (
                 chat.type === "group" && (
-                  <span className="text-[color:var(--wa-chat-subtitle)]">click here for group info</span>
+                 <span className="text-[color:var(--wa-chat-subtitle)]">{chat.memberNames || "group"}</span>
                 )
               )}
             </div>

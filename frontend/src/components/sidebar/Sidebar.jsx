@@ -7,6 +7,9 @@ import ChatFilters, { DEFAULT_FILTERS } from "./ChatFilters";
 import ArchivedRow from "./ArchivedRow";
 import ChatList from "./ChatList";
 import MobileBottomNav from "./MobileBottomNav";
+// import, under the NewChatView import
+import NewGroupView from "./NewGroupView";
+ 
 
 /* Phone: full width. Tablet: 380. Laptop: 410. Wide screens: ~30% (410–480). */
 const ASIDE =
@@ -22,6 +25,10 @@ export default function Sidebar({
   onNewChat,
   onBackFromNewChat,
   onSelectNewChatUser,
+  isNewGroup,
+  onNewGroup,
+  onBackFromNewGroup,
+  onCreateGroup,
   onLogout,
   filters = DEFAULT_FILTERS,
 }) {
@@ -52,6 +59,14 @@ export default function Sidebar({
     });
   }, [chats, activeSearch, activeFilter]);
 
+    if (isNewGroup) {
+    return (
+      <aside className={ASIDE}>
+        <NewGroupView onBack={onBackFromNewGroup} onCreate={onCreateGroup} />
+      </aside>
+    );
+  }
+
   if (isNewChat) {
     return (
       <aside className={ASIDE}>
@@ -79,6 +94,7 @@ export default function Sidebar({
     <aside className={ASIDE}>
       <SidebarHeader
         onNewChat={onNewChat}
+        onNewGroup={onNewGroup}
         onOpenStarred={() => setShowStarred(true)}
         onLogout={onLogout}
       />

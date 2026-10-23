@@ -6,6 +6,7 @@ import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import MessageComposer from "./MessageComposer";
 import ChatModals from "./ChatModals";
+import GroupInfoPanel from "./GroupInfoPanel";
 
 import { useChatMessages } from "./useChatMessages";
 import { useMessageActions } from "./useMessageActions";
@@ -31,6 +32,8 @@ export default function ChatWindow({
   onMessageStatusChange,
   onConversationUpdated,
   onStartCall,
+    onGroupUpdated,
+  onGroupLeft,
 }) {
   const currentUserId = getCurrentUserId();
   const chatId = chat?.id;
@@ -45,6 +48,9 @@ export default function ChatWindow({
   const [isDeleting, setIsDeleting] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [mediaSlides, setMediaSlides] = useState([]);
+    // Which chat has its group info panel open (switching chats closes it).
+  const [infoChatId, setInfoChatId] = useState(null);
+  const infoOpen = infoChatId === chatId;
 
   // Sidebar sync callback
   const notifySidebar = useCallback(
@@ -144,9 +150,16 @@ export default function ChatWindow({
     Date.now() - new Date(deletingMessage.createdAt).getTime() < DELETE_FOR_EVERYONE_WINDOW_MS;
 
   return (
+     
+    <div className="relative flex h-full min-h-0 w-full min-w-0">
     <section className="relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-[var(--wa-chat-bg)]">
       <div className="wa-wallpaper" aria-hidden="true" />
-      <ChatHeader chat={chat} onBack={onBack} onStartCall={onStartCall} />
+      <ChatHeader
+        chat={chat}
+        onBack={onBack}
+        onStartCall={onStartCall}
+        onOpenInfo={chat.type === "group" ? () => setInfoChatId(chatId) : undefined}
+      />
 
       {/* Message List Area */}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -171,6 +184,7 @@ export default function ChatWindow({
           <MessageList
             messages={messages}
             currentUserId={currentUserId}
+                        isGroup={chat.type === "group"}
             onOpenMenu={(msg, pos) => setMenu({ message: msg, ...pos })}
             onMediaClick={handleMediaClick}
             onAttachmentDelete={deleteSingleAttachment}
@@ -240,8 +254,20 @@ export default function ChatWindow({
         onClearNotice={clearNotice}
         lightboxIndex={lightboxIndex}
         mediaSlides={mediaSlides}
-        onCloseLightbox={() => setLightboxIndex(-1)}
+              onCloseLightbox={() => setLightboxIndex(-1)}
       />
     </section>
+
+    {infoOpen && chat.type === "group" && (
+      <GroupInfoPanel
+        chat={chat}
+        currentUserId={currentUserId}
+        onClose={() => setInfoChatId(null)}
+        onGroupUpdated={onGroupUpdated}
+        onGroupLeft={onGroupLeft}
+      />
+    )}
+    </div>
   );
 }
+  
