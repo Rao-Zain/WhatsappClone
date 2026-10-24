@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { Images, MessageCircleMore, Phone } from "lucide-react";
-
+import { useNavCounts } from "../../context/NavCountsContext";
 /* ---------- Icons (exported for the mobile bottom nav) ---------- */
 export function ChatFilledIcon({ size = 22 }) {
   return (
@@ -46,12 +46,13 @@ function MetaAiIcon({ size = 22 }) {
   );
 }
 
+// countKey: which real number from useNavCounts() the badge shows.
 const NAV_ITEMS = [
-  { to: "/", label: "Chats", end: true, icon: ChatFilledIcon, badge: true },
-  { to: "/calls", label: "Calls", icon: Phone, badge: true },
-  { to: "/status", label: "Status", icon: StatusIcon, dot: true },
+  { to: "/app", label: "Chats", end: true, icon: ChatFilledIcon, countKey: "chats" },
+  { to: "/app/calls", label: "Calls", icon: Phone, countKey: "calls" },
+  { to: "/status", label: "Status", icon: StatusIcon },
   { to: "/channels", label: "Channels", icon: MessageCircleMore },
-  { to: "/communities", label: "Communities", icon: CommunitiesIcon },
+  { to: "/communities", label: "Communities", icon: CommunitiesIcon, countKey: "groups" },
 ];
 
 const itemClass = (isActive) =>
@@ -61,30 +62,23 @@ const itemClass = (isActive) =>
       : "text-[color:var(--wa-rail-icon)] hover:bg-[var(--wa-rail-item-hover)]"
   }`;
 
-export default function NavigationRail({
-  unreadChats = 83,
-  unreadCalls = 1,
-  hasStatusUpdate = true,
-  profileImage,
-}) {
+export default function NavigationRail({ profileImage }) {
+  const { counts } = useNavCounts();
+
   return (
     <aside className="hidden h-full w-16 shrink-0 select-none flex-col items-center justify-between border-r border-[color:var(--wa-rail-border)] bg-[var(--wa-rail-bg)] pb-2.5 pt-1.5 sm:flex">
       <nav aria-label="Main" className="flex flex-col items-center gap-0.5">
-        {NAV_ITEMS.map(({ to, label, end, icon: Icon, badge, dot }) => {
-          const badgeCount = label === "Chats" ? unreadChats : label === "Calls" ? unreadCalls : 0;
+               {NAV_ITEMS.map(({ to, label, end, icon: Icon, countKey }) => {
+          const badgeCount = countKey ? counts[countKey] : 0;
 
           return (
             <NavLink key={to} to={to} end={end} aria-label={label} title={label} className={({ isActive }) => itemClass(isActive)}>
               <Icon size={22} strokeWidth={1.9} />
 
-              {badge && badgeCount > 0 && (
+            {badgeCount > 0 && (
                 <span className="absolute -right-1.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[var(--wa-badge-bg)] px-1 text-[11px] font-semibold leading-none text-[color:var(--wa-badge-fg)]">
-                  {badgeCount}
+                  {badgeCount > 99 ? "99+" : badgeCount}
                 </span>
-              )}
-
-              {dot && hasStatusUpdate && (
-                <span className="absolute right-1 top-1 size-2.5 rounded-full bg-[var(--wa-badge-bg)] ring-2 ring-[var(--wa-rail-bg)]" />
               )}
             </NavLink>
           );

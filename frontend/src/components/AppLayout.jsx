@@ -1,24 +1,23 @@
 
-import { useEffect, useState } from "react";
-
+import { useEffect, useMemo, useState } from "react";
 import api from "../../lib/api";
 import { getSocket } from "../../lib/socket";
 import NavigationRail from "./layout/NavigationRail";
 import Sidebar from "./sidebar/Sidebar";
 import ChatWindow from "./chat/ChatWindow";
 import { useAuth } from "../context/AuthContext";
+import { useNavCounts } from "../context/NavCountsContext";
 import { useCallback } from "react";
 import { PresenceProvider } from "../context/PresenceContext";
 import useCall from "../hooks/useCall";
 import CallOverlay from "../components/call/CallOverlay";
 import useAppSounds from "../hooks/useAppSounds";
+import { useLocation, useNavigate } from "react-router-dom";
+import CallsSidebar from "./calls/CallsSidebar";
+import CallsMain from "./calls/CallsMain";
+import { useCallHistory } from "./calls/useCallHistory";
 import {
-  requestNotificationPermission,
-  showNotification,
-  isAppActive,
-} from "../../lib/notifications";
-// Inside AppLayout:
-
+  requestNotificationPermission, showNotification, isAppActive } from "../../lib/notifications";
 
 
 function getCurrentUser() {
@@ -67,6 +66,18 @@ function formatTime(date) {
   });
 }
 
+// Text shown under a chat name. In groups, incoming messages get the sender's name.
+function getPreview(isGroup, message, isOwnMessage, fallback) {
+  if (!message.text) return fallback;
+    if (message.type === "system") return message.text;
+  if (!isGroup || isOwnMessage) return message.text;
+
+  const senderName =
+    message.sender?.name?.trim() || message.sender?.username || "Someone";
+
+  return `${senderName}: ${message.text}`;
+}
+
 function formatConversation(conversation, currentUserId) {
   const participants = conversation.participants || [];
 
@@ -79,6 +90,9 @@ function formatConversation(conversation, currentUserId) {
   const lastMessage = conversation.lastMessage;
 
   const isGroup = conversation.type === "group";
+    const adminIds = isGroup
+    ? (conversation.admins || []).map((admin) => String(admin._id || admin.id || admin))
+    : [];
 
   const senderId = lastMessage?.sender?._id ||
     lastMessage?.sender?.id ||
@@ -97,24 +111,68 @@ function formatConversation(conversation, currentUserId) {
     time: formatTime(
       lastMessage?.createdAt || conversation.updatedAt
     ),
-    message: lastMessage?.deletedForEveryone
+     message: lastMessage?.deletedForEveryone
       ? "This message was deleted"
-      : lastMessage?.text || "No messages yet",
+      : lastMessage?.type === "system"
+        ? lastMessage.text
+        : lastMessage?.text
+          ? isGroup && senderId && String(senderId) !== String(currentUserId)
+            ? `${lastMessage.sender?.name?.trim() || lastMessage.sender?.username || "Someone"}: ${lastMessage.text}`
+            : lastMessage.text
+          : "No messages yet",
 
     username: isGroup ? "" : otherParticipant?.username || "",
+
+    profileName: isGroup ? "" : otherParticipant?.name || "",   // ADD
+    about: isGroup ? "" : otherParticipant?.about || "",       
+
     userId: isGroup
       ? ""
       : String(otherParticipant?._id || otherParticipant?.id || ""),
     isOnline: isGroup ? false : Boolean(otherParticipant?.isOnline),
     lastSeen: isGroup ? null : otherParticipant?.lastSeen || null,
 
+     // Group info (empty for private chats)
+    adminIds,
+    isAdmin: adminIds.includes(String(currentUserId)),
+    members: isGroup
+      ? participants.map((participant) => {
+          const id = String(participant._id || participant.id || participant);
+
+          return {
+            id,
+            name:
+              participant.name?.trim() || participant.username || "Unknown user",
+            avatar: participant.profilePicture || "",
+            about: participant.about || "",
+            isAdmin: adminIds.includes(id),
+          };
+        })
+      : [],
+    memberNames: isGroup
+      ? [
+          ...participants
+            .filter(
+              (participant) =>
+                String(participant._id || participant.id || participant) !==
+                String(currentUserId)
+            )
+            .map(
+              (participant) =>
+                participant.name?.trim() || participant.username || "Unknown"
+            ),
+          "You",
+        ].join(", ")
+      : "",
+
     unread: Number(conversation.unreadCount || 0),
 
     type: isGroup ? "group" : "personal",
     favorite: false,
-    sent: senderId
-      ? String(senderId) === String(currentUserId)
-      : false,
+        sent:
+      senderId && lastMessage?.type !== "system"
+        ? String(senderId) === String(currentUserId)
+        : false,
   };
 }
 
@@ -128,9 +186,16 @@ export default function AppLayout() {
     useState(false);
   const [actionError, setActionError] = useState("");
   const { user, setUser } = useAuth();
+    const { refreshNavCounts } = useNavCounts();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const view = location.pathname.startsWith("/app/calls") ? "calls" : "chats";
+  const callHistory = useCallHistory({ enabled: view === "calls" });
+  const [selectedCallId, setSelectedCallId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const socket = getSocket();
   const call = useCall(socket);
+    const [isNewGroup, setIsNewGroup] = useState(false);
 
 
   const { playRingtone, stopRingtone, playRingback, stopRingback, playMessage } =
@@ -183,9 +248,21 @@ export default function AppLayout() {
   const getCallTitle = (conversationId) =>
     chats.find((c) => c.id === String(conversationId))?.name || "Unknown";
 
-  // Name of a participant inside the call grid
-  const getUserName = (userId) =>
-    chats.find((c) => c.userId === String(userId))?.name || "Participant";
+    const getUserName = (userId) =>
+    chats.find((c) => c.userId === String(userId))?.name ||
+    chats
+      .flatMap((c) => c.members || [])
+      .find((member) => member.id === String(userId))?.name ||
+    "Participant";
+
+  // Photo for the ringing screen (personal chat photo or group picture)
+const getCallAvatar = (conversationId) =>
+  chats.find((c) => c.id === String(conversationId))?.avatar || "";
+
+// Photo for a participant inside an active call
+const getUserAvatar = (userId) =>
+  chats.find((c) => c.userId === String(userId))?.avatar || "";
+
   // Load the existing conversations when the layout opens.
   useEffect(() => {
     let cancelled = false;
@@ -251,6 +328,7 @@ export default function AppLayout() {
     };
   }, []);
 
+  // replace handleConversationRead
   const handleConversationRead = useCallback((conversationId) => {
     setChats((previous) =>
       previous.map((chat) =>
@@ -259,7 +337,10 @@ export default function AppLayout() {
           : chat
       )
     );
-  }, []);
+
+    // The nav badges come from the server: ask for fresh numbers.
+    refreshNavCounts();
+  }, [refreshNavCounts]);
 
   // Listen for incoming messages globally, not just in ChatWindow.
   useEffect(() => {
@@ -286,9 +367,9 @@ export default function AppLayout() {
         senderId === String(currentUserId);
 
       const isSelectedConversation =
-        String(selectedChatId) === conversationId;
+        view === "chats" && String(selectedChatId) === conversationId;
 
-      if (!isOwnMessage) {
+      if (!isOwnMessage && message.type !== "system") {
         const active = isAppActive();
 
         // Play a sound unless the user is already reading this chat
@@ -331,11 +412,13 @@ export default function AppLayout() {
 
           return {
             ...chat,
-            message: message.text || chat.message,
+           message: getPreview(chat.type === "group", message, isOwnMessage, chat.message),
             time: formatTime(message.createdAt),
-            sent: isOwnMessage,
+            sent: message.type === "system" ? false : isOwnMessage,
             unread:
-              !isOwnMessage && !isSelectedConversation
+              !isOwnMessage &&
+              !isSelectedConversation &&
+              message.type !== "system"
                 ? (chat.unread || 0) + 1
                 : chat.unread || 0,
           };
@@ -389,7 +472,7 @@ export default function AppLayout() {
               return [
                 {
                   ...formattedChat,
-                  message: message.text || formattedChat.message,
+                 message: getPreview(formattedChat.type === "group", message, isOwnMessage, formattedChat.message),
                   time: formatTime(message.createdAt),
                   sent: isOwnMessage,
                   unread:
@@ -434,7 +517,119 @@ export default function AppLayout() {
       socket.off("message:new", handleNewMessage);
       socket.off("message:deleted", handleDeleted);
     };
-  }, [selectedChatId, playMessage]);
+  }, [selectedChatId, view, playMessage]);
+
+
+    // Live profile updates (name, username, about, photo) from other users,
+  // and from my own other tabs/devices.
+  useEffect(() => {
+    const socket = getSocket();
+
+    function handleUserUpdated(payload) {
+      const { userId, ...changes } = payload || {};
+      if (!userId) return;
+
+      const id = String(userId);
+
+      // My own profile changed in another tab or device.
+      if (id === String(getCurrentUserId())) {
+        setUser((previous) => (previous ? { ...previous, ...changes } : previous));
+        return;
+      }
+
+      // A contact changed their profile: patch their chats in place.
+      setChats((previousChats) =>
+        previousChats.map((chat) => {
+          if (chat.type !== "personal" || chat.userId !== id) return chat;
+
+          const profileName = changes.name ?? chat.profileName ?? "";
+          const username = changes.username ?? chat.username ?? "";
+
+          return {
+            ...chat,
+            profileName,
+            username,
+            about: changes.about ?? chat.about,
+            avatar: changes.profilePicture ?? chat.avatar,
+            // Same rule as formatConversation: name, else username.
+            name: profileName.trim() || username || "Unknown user",
+          };
+        })
+      );
+    }
+
+    socket.on("user:updated", handleUserUpdated);
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    return () => {
+      socket.off("user:updated", handleUserUpdated);
+    };
+  }, [setUser]);
+
+
+  // A group changed (name, photo, members, admins): refresh it in the sidebar.
+  // Unread counts and the last-message preview are kept as they are.
+  const applyConversationUpdate = useCallback((conversation) => {
+    const formatted = formatConversation(conversation, getCurrentUserId());
+
+    setChats((previousChats) =>
+      previousChats.map((chat) =>
+        chat.id !== formatted.id
+          ? chat
+          : {
+              ...chat,
+              name: formatted.name,
+              avatar: formatted.avatar,
+              members: formatted.members,
+              memberNames: formatted.memberNames,
+              adminIds: formatted.adminIds,
+              isAdmin: formatted.isAdmin,
+            }
+      )
+    );
+  }, []);
+
+  // Live group events: a new group, group changes, and being removed from one.
+  useEffect(() => {
+    const socket = getSocket();
+
+    function handleConversationNew(conversation) {
+      const formatted = formatConversation(conversation, getCurrentUserId());
+
+      setChats((previousChats) =>
+        previousChats.some((chat) => chat.id === formatted.id)
+          ? previousChats
+          : [formatted, ...previousChats]
+      );
+    }
+
+    function handleConversationRemoved({ conversationId }) {
+      const id = String(conversationId);
+
+      setChats((previousChats) =>
+        previousChats.filter((chat) => chat.id !== id)
+      );
+      setSelectedChatId((current) => (current === id ? null : current));
+    }
+
+    socket.on("conversation:new", handleConversationNew);
+    socket.on("conversation:updated", applyConversationUpdate);
+    socket.on("conversation:removed", handleConversationRemoved);
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    return () => {
+      socket.off("conversation:new", handleConversationNew);
+      socket.off("conversation:updated", applyConversationUpdate);
+      socket.off("conversation:removed", handleConversationRemoved);
+    };
+  }, [applyConversationUpdate]);
+
 
   // Clear unread messages as soon as the user opens a conversation.
   function handleSelectChat(chatId) {
@@ -497,6 +692,68 @@ export default function AppLayout() {
     } finally {
       setCreatingConversation(false);
     }
+  }
+
+    // Opening the calls page clears the missed-call badge.
+  const callCount = callHistory.calls.length;
+
+  useEffect(() => {
+    if (view !== "calls") return;
+
+    api
+      .post("/calls/seen")
+      .then(refreshNavCounts)
+      .catch(() => {});
+  }, [view, callCount, refreshNavCounts]);
+
+  // "Message" button on a call: go to that chat.
+  function handleMessageFromCall(chatId) {
+    handleSelectChat(chatId);
+    navigate("/app");
+  }
+
+  const selectedCall =
+    callHistory.calls.find((item) => item.id === selectedCallId) || null;
+
+  // Numbers on the "Unread" and "Groups" filter chips (always from ALL chats,
+  // so they don't change while searching).
+  const filterCounts = useMemo(() => {
+    const unreadChats = chats.filter((chat) => chat.unread > 0);
+
+    return {
+      unread: unreadChats.length,
+      groups: unreadChats.filter((chat) => chat.type === "group").length,
+    };
+  }, [chats]);
+
+    // I exited a group from the info panel.
+  function handleGroupLeft(conversationId) {
+    const id = String(conversationId);
+
+    setChats((previousChats) => previousChats.filter((chat) => chat.id !== id));
+    setSelectedChatId((current) => (current === id ? null : current));
+  }
+
+
+    // Throws on failure so the New group screen can show the error.
+  async function handleCreateGroup(name, participantIds) {
+    const response = await api.post("/conversations/group", {
+      name,
+      participantIds,
+    });
+
+    const formattedChat = formatConversation(
+      response.data.conversation,
+      getCurrentUserId()
+    );
+
+    setChats((previousChats) => [
+      formattedChat,
+      ...previousChats.filter((chat) => chat.id !== formattedChat.id),
+    ]);
+
+    handleSelectChat(formattedChat.id);
+    setIsNewGroup(false);
   }
 
   const selectedChat =
@@ -576,10 +833,27 @@ export default function AppLayout() {
         />
 
         <div className="relative flex w-[410px] min-w-[340px] shrink-0 flex-col max-[700px]:w-[calc(100%-65px)] max-[700px]:min-w-0">
+          {view === "calls" ? (
+            <CallsSidebar
+              history={callHistory}
+              selectedCallId={selectedCallId}
+              onSelect={(item) => setSelectedCallId(item.id)}
+              onCall={call.startCall}
+              canCall={call.callState === "idle"}
+            />
+          ) : (
           <Sidebar
             chats={filteredChats}
             selectedChatId={selectedChatId}
             onSelectChat={handleSelectChat}
+             isNewGroup={isNewGroup}
+             filterCounts={filterCounts}
+            onNewGroup={() => {
+              setActionError("");
+              setIsNewGroup(true);
+            }}
+            onBackFromNewGroup={() => setIsNewGroup(false)}
+            onCreateGroup={handleCreateGroup}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             isNewChat={isNewChat}
@@ -590,6 +864,8 @@ export default function AppLayout() {
             onBackFromNewChat={() => setIsNewChat(false)}
             onSelectNewChatUser={handleSelectNewChatUser}
           />
+
+           )}
 
           {creatingConversation && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 text-sm text-[#667781]">
@@ -638,8 +914,15 @@ export default function AppLayout() {
         </div>
 
         <main className="min-w-0 flex-1 max-[700px]:hidden">
-          {/* <ChatWindow chat={selectedChat} onConversationRead={(id) => setChats((previous) => previous.map((item) => item.id === id ? { ...item, unread: 0 } : item))} /> */}
-          {/* <ChatWindow chat={selectedChat} chats={chats} onConversationRead={handleConversationRead} /> */}
+        {view === "calls" ? (
+            <CallsMain
+              call={selectedCall}
+              calls={callHistory.calls}
+              onCall={call.startCall}
+              onMessage={handleMessageFromCall}
+              canCall={call.callState === "idle"}
+            />
+          ) : (
           <ChatWindow
             chat={selectedChat}
             chats={chats}
@@ -648,17 +931,22 @@ export default function AppLayout() {
             onMessageSent={handleMessageSent} // <-- Add this prop here
             onMessageStatusChange={handleMessageStatusChange}
             onStartCall={call.startCall}
+                        onGroupUpdated={applyConversationUpdate}
+            onGroupLeft={handleGroupLeft}
           />
+           )}
 
         </main>
 
       </div>
 
-      <CallOverlay
-        call={call}
-        getUserName={getUserName}
-        getCallTitle={getCallTitle}
-      />
+     <CallOverlay
+  call={call}
+  getUserName={getUserName}
+  getCallTitle={getCallTitle}
+  getCallAvatar={getCallAvatar}
+  getUserAvatar={getUserAvatar}
+/>
     </PresenceProvider>
   );
 }

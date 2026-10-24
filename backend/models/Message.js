@@ -110,6 +110,7 @@ const messageSchema = new mongoose.Schema(
         "location",
         "poll",
         "event",
+        "system",
       ],
       default: "text",
       required: true,

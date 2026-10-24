@@ -87,9 +87,10 @@ export function serializeMessage(message, viewerId = null) {
 export async function resolveReplyTarget(replyTo, conversationId) {
   if (!replyTo || !mongoose.isValidObjectId(replyTo)) return null;
 
-  const target = await Message.findOne({
+ const target = await Message.findOne({
     _id: replyTo,
     conversation: conversationId,
+    type: { $ne: "system" },
   }).select("_id");
 
   return target ? target._id : null;

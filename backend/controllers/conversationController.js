@@ -4,6 +4,7 @@ import Message from "../models/Message.js";
 import User from "../models/User.js";
 import { REPLY_POPULATE, resolveReplyTarget, serializeMessage } from "../utils/serializeMessage.js";
 import { hasOnlineRecipient } from "../utils/messageDelivery.js";
+import { countMissedCalls } from "./callController.js";   // with the other imports
 import fs from "fs";
 import path from "path";
 
@@ -74,6 +75,240 @@ export async function createConversation(req, res) {
   }
 }
 
+// POST /api/conversations/group
+export async function createGroup(req, res) {
+  try {
+    const { name, participantIds } = req.body;
+    const creatorId = String(req.user._id);
+
+    const groupName = typeof name === "string" ? name.trim() : "";
+
+    if (!groupName) {
+      return res.status(400).json({
+        success: false,
+        message: "Group name is required.",
+      });
+    }
+
+    if (groupName.length > 50) {
+      return res.status(400).json({
+        success: false,
+        message: "Group name cannot exceed 50 characters.",
+      });
+    }
+
+    if (!Array.isArray(participantIds)) {
+      return res.status(400).json({
+        success: false,
+        message: "Choose at least one member.",
+      });
+    }
+
+    // Remove duplicates and the creator (they are added automatically).
+    const memberIds = [...new Set(participantIds.map(String))].filter(
+      (id) => id !== creatorId
+    );
+
+    if (memberIds.some((id) => !mongoose.isValidObjectId(id))) {
+      return res.status(400).json({
+        success: false,
+        message: "One or more member IDs are invalid.",
+      });
+    }
+
+    if (memberIds.length < 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Add at least one other member.",
+      });
+    }
+
+    if (memberIds.length > 255) {
+      return res.status(400).json({
+        success: false,
+        message: "A group can have at most 256 members.",
+      });
+    }
+
+    const members = await User.find({
+      _id: { $in: memberIds },
+      emailVerified: true,
+    }).select("_id");
+
+    if (members.length !== memberIds.length) {
+      return res.status(404).json({
+        success: false,
+        message: "One or more users were not found.",
+      });
+    }
+
+    const created = await Conversation.create({
+      type: "group",
+      groupName,
+      participants: [req.user._id, ...members.map((member) => member._id)],
+      admins: [req.user._id],
+    });
+
+    const conversation = await Conversation.findById(created._id)
+      .populate(
+        "participants",
+        "name username profilePicture about isOnline lastSeen"
+      )
+      .populate("lastMessage");
+
+    // Show the new group in every member's sidebar immediately.
+    const io = req.app.get("io");
+    const payload = { ...conversation.toObject(), unreadCount: 0 };
+
+    for (const member of conversation.participants) {
+      if (String(member._id) === creatorId) continue;
+
+      io?.to(`user:${String(member._id)}`).emit("conversation:new", payload);
+    }
+
+    return res.status(201).json({
+      success: true,
+      conversation,
+    });
+  } catch (error) {
+    console.error("Create group error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to create the group.",
+    });
+  }
+}
+
+
+// Makes user text safe to use inside a regular expression.
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// GET /api/conversations/:conversationId/search?q=...
+// Finds messages containing the text in ONE conversation (newest first, max 50).
+export async function searchMessages(req, res) {
+  try {
+    const { conversationId } = req.params;
+
+    if (!mongoose.isValidObjectId(conversationId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid conversation ID.",
+      });
+    }
+
+    const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
+
+    if (!query) {
+      return res.status(200).json({ success: true, total: 0, messages: [] });
+    }
+
+    if (query.length > 100) {
+      return res.status(400).json({
+        success: false,
+        message: "Search text cannot exceed 100 characters.",
+      });
+    }
+
+    const conversation = await Conversation.findOne({
+      _id: conversationId,
+      participants: req.user._id,
+    }).select("_id");
+
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        message: "Conversation not found.",
+      });
+    }
+
+    const filter = {
+      conversation: conversation._id,
+      deletedFor: { $ne: req.user._id },
+      deletedForEveryone: { $ne: true },
+      type: { $ne: "system" },
+      // Escaped, so symbols like ( or * are searched as plain text.
+      text: { $regex: escapeRegExp(query), $options: "i" },
+    };
+
+    const [messages, total] = await Promise.all([
+      Message.find(filter)
+        .populate("sender", "username name profilePicture")
+        .sort({ createdAt: -1, _id: -1 })
+        .limit(50),
+      Message.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      total,
+      messages: messages.map((message) => serializeMessage(message, req.user._id)),
+    });
+  } catch (error) {
+    console.error("Search messages error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to search messages.",
+    });
+  }
+}
+
+// GET /api/conversations/unread-summary
+// Number of unread messages in private chats and in groups (for the nav badges).
+export async function getUnreadSummary(req, res) {
+  try {
+    const currentUserId = req.user._id;
+
+    const conversations = await Conversation.find({
+      participants: currentUserId,
+    })
+      .select("_id type")
+      .lean();
+
+    const groupIds = new Set(
+      conversations
+        .filter((conversation) => conversation.type === "group")
+        .map((conversation) => String(conversation._id))
+    );
+
+    // Same rule the chat list uses for each chat's unread number.
+    const rows = await Message.aggregate([
+      {
+        $match: {
+          conversation: { $in: conversations.map((conversation) => conversation._id) },
+          sender: { $ne: currentUserId },
+          readBy: { $ne: currentUserId },
+        },
+      },
+      { $group: { _id: "$conversation", count: { $sum: 1 } } },
+    ]);
+
+    let chats = 0;
+    let groups = 0;
+
+    for (const row of rows) {
+      if (groupIds.has(String(row._id))) groups += row.count;
+      else chats += row.count;
+    }
+
+       const calls = await countMissedCalls(req.user);
+
+    return res.status(200).json({
+      success: true,
+      unread: { chats, groups, calls },
+    });
+  } catch (error) {
+    console.error("Unread summary error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load unread counts.",
+    });
+  }
+}
 
  // GET /api/conversations/search-users?phone=...
 export async function searchUsersByPhone(req, res) {
@@ -96,7 +331,7 @@ export async function searchUsersByPhone(req, res) {
       phone,
       _id: { $ne: req.user._id },
       emailVerified: true,
-    }).select("_id username phone profilePicture about");
+    }).select("_id name  username phone profilePicture about");
 
     return res.status(200).json({
       success: true,
@@ -130,7 +365,7 @@ export async function getConversations(req, res) {
         path: "lastMessage",
         populate: {
           path: "sender",
-          select: "username profilePicture",
+          select: "name username profilePicture",
         },
       })
       .sort({ updatedAt: -1 });
@@ -197,26 +432,53 @@ export async function markConversationRead(req, res) {
     }
 
     // Only mark messages sent by other participants as read.
+        const isGroup = conversation.type === "group";
+
+    // Only mark messages sent by other participants as read.
+    // In a group, a message only gets blue ticks once EVERY member has read it.
     await Message.updateMany(
       {
         conversation: conversation._id,
         sender: { $ne: currentUserId },
         readBy: { $ne: currentUserId },
       },
-      {
-        $addToSet: { readBy: currentUserId },
-        $set: { status: "read" },
-      }
+      isGroup
+        ? { $addToSet: { readBy: currentUserId } }
+        : { $addToSet: { readBy: currentUserId }, $set: { status: "read" } }
     );
 
-    const io = req.app.get("io");
-    for (const participantId of conversation.participants) {
-      if (String(participantId) === String(currentUserId)) continue;
+    let fullyReadIds = [];
 
-      io?.to(`user:${String(participantId)}`).emit("messages:read", {
-        conversationId: String(conversation._id),
-        readBy: String(currentUserId),
-      });
+    if (isGroup) {
+      const fullyRead = await Message.find({
+        conversation: conversation._id,
+        status: { $ne: "read" },
+        readBy: { $all: [...conversation.participants] },
+      }).select("_id");
+
+      fullyReadIds = fullyRead.map((message) => String(message._id));
+
+      if (fullyReadIds.length) {
+        await Message.updateMany(
+          { _id: { $in: fullyReadIds } },
+          { $set: { status: "read" } }
+        );
+      }
+    }
+
+    const io = req.app.get("io");
+
+    if (!isGroup || fullyReadIds.length) {
+      for (const participantId of conversation.participants) {
+        if (String(participantId) === String(currentUserId)) continue;
+
+        io?.to(`user:${String(participantId)}`).emit("messages:read", {
+          conversationId: String(conversation._id),
+          readBy: String(currentUserId),
+          // Groups: only these messages became fully read.
+          ...(isGroup ? { messageIds: fullyReadIds } : {}),
+        });
+      }
     }
 
     return res.status(200).json({
@@ -266,6 +528,73 @@ export async function getMessages(req, res) {
 
      const filter = { conversation: conversation._id, deletedFor: { $ne: req.user._id } };
 
+         // ?around=<messageId>: a window of messages centred on that message.
+    // Used to open an old search result without loading the whole history.
+    if (req.query.around) {
+      if (!mongoose.isValidObjectId(req.query.around)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid message ID.",
+        });
+      }
+
+      const target = await Message.findOne({ ...filter, _id: req.query.around })
+        .populate("sender", "username name profilePicture")
+        .populate(REPLY_POPULATE);
+
+      if (!target) {
+        return res.status(404).json({
+          success: false,
+          message: "Message not found.",
+        });
+      }
+
+      const SIDE = 20;
+
+      const [older, newer] = await Promise.all([
+        Message.find({
+          ...filter,
+          $or: [
+            { createdAt: { $lt: target.createdAt } },
+            { createdAt: target.createdAt, _id: { $lt: target._id } },
+          ],
+        })
+          .populate("sender", "username name profilePicture")
+          .populate(REPLY_POPULATE)
+          .sort({ createdAt: -1, _id: -1 })
+          .limit(SIDE + 1),
+        Message.find({
+          ...filter,
+          $or: [
+            { createdAt: { $gt: target.createdAt } },
+            { createdAt: target.createdAt, _id: { $gt: target._id } },
+          ],
+        })
+          .populate("sender", "username name profilePicture")
+          .populate(REPLY_POPULATE)
+          .sort({ createdAt: 1, _id: 1 })
+          .limit(SIDE + 1),
+      ]);
+
+      // One extra message was fetched only to learn whether newer ones exist.
+      const hasNewer = newer.length > SIDE;
+
+      return res.status(200).json({
+        success: true,
+        hasNewer,
+        // Are there messages above this window? (for scrolling up)
+        hasMore: older.length > SIDE,
+        messages: [
+          ...older.slice(0, SIDE).reverse(),
+          target,
+          ...newer.slice(0, SIDE),
+        ].map(
+          (message) => serializeMessage(message, req.user._id)
+        ),
+      });
+    }
+
+
     if (req.query.before) {
       if (!mongoose.isValidObjectId(req.query.before)) {
         return res.status(400).json({
@@ -289,41 +618,21 @@ export async function getMessages(req, res) {
       filter.createdAt = { $lt: cursorMessage.createdAt };
     }
 
-    const messages = await Message.find(filter)
-    .populate("sender", "username name profilePicture")
-    .populate(REPLY_POPULATE)
-    .sort({ createdAt: -1, _id: -1 })
-    .limit(limit);
+    // One extra message is fetched only to learn whether older ones exist.
+    const found = await Message.find(filter)
+      .populate("sender", "username name profilePicture")
+      .populate(REPLY_POPULATE)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit + 1);
 
-  return res.status(200).json({
-    success: true,
-    messages: messages.reverse().map((m) => serializeMessage(m, req.user._id)),
-  });
+    const hasMore = found.length > limit;
+    const messages = found.slice(0, limit);
 
-   
-const messagesWithAttachmentUrls = messages.reverse().map(
-  (message) => {
-    const item = message.toObject();
-
-    item.attachments = (item.attachments || []).map(
-      (file, index) => ({
-        _id: String(file._id),
-        originalName: file.originalName,
-        mimeType: file.mimeType,
-        size: file.size,
-        downloadUrl:
-          `/conversations/${item.conversation}/messages/${item._id}/attachments/${index}`,
-      })
-    );
-
-    return item;
-  }
-);
-
-return res.status(200).json({
-  success: true,
-  messages: messagesWithAttachmentUrls,
-});
+    return res.status(200).json({
+      success: true,
+      hasMore,
+      messages: messages.reverse().map((m) => serializeMessage(m, req.user._id)),
+    });
 
   } catch (error) {
     console.error("Get messages error:", error);

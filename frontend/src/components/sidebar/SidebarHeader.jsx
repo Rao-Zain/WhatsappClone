@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Camera, LogOut, MoreVertical, Palette, Star } from "lucide-react";
+import { Camera, LogOut, MoreVertical, Palette, Star, Users  } from "lucide-react";
 import ThemeModal from "../../theme/ThemeModal";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../../lib/api";
@@ -54,7 +54,7 @@ function LogoutDialog({ onCancel, onConfirm }) {
   );
 }
 
-export default function SidebarHeader({ onNewChat, onOpenStarred, onLogout }) {
+export default function SidebarHeader({ onNewChat, onNewGroup, onOpenStarred, onLogout }) {
   const navigate = useNavigate();
   const auth = useAuth() || {};
 
@@ -143,6 +143,12 @@ export default function SidebarHeader({ onNewChat, onOpenStarred, onLogout }) {
                 role="menu"
                 className="wa-shadow-menu absolute right-0 top-11 z-40 w-[230px] overflow-hidden rounded-xl bg-[var(--wa-menu-bg)] py-2"
               >
+
+                <button type="button" role="menuitem" className={menuItem} onClick={run(onNewGroup)}>
+                  <Users size={18} className="text-[color:var(--wa-menu-icon)]" />
+                  New group
+                </button>
+
                 <button type="button" role="menuitem" className={menuItem} onClick={run(onOpenStarred)}>
                   <Star size={18} className="text-[color:var(--wa-menu-icon)]" />
                   Starred messages

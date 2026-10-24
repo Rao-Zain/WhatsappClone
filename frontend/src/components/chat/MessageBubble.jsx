@@ -3,6 +3,17 @@ import { Check, CheckCheck, ChevronDown, Forward, Star, Download, FileText, Tras
 import api from "../../../lib/api";
 import QuotedMessage from "./QuotedMessage";
 import VoiceNotePlayer from "./VoiceNotePlayer";
+// import
+import HighlightedText from "./HighlightedText";
+
+
+// A stable colour per sender so each person is easy to tell apart in a group.
+function senderColor(id = "") {
+  let hash = 0;
+  for (const char of String(id)) hash = (hash * 31 + char.charCodeAt(0)) % 360;
+  return `hsl(${hash} 55% 48%)`;
+}
+
 
 function formatSize(bytes = 0) {
   if (bytes < 1024) return `${bytes} B`;
@@ -21,6 +32,8 @@ function formatMessageTime(date) {
 export default function MessageBubble({
   message,
   showTail = true,
+  showSender = false,
+  highlight = "",
   onJumpToMessage,
   onOpenMenu,
   onMediaClick,
@@ -157,6 +170,15 @@ export default function MessageBubble({
         </button>
       )}
 
+            {showSender && message.senderName && (
+        <p
+          className="mb-0.5 truncate px-1 text-[12.8px] font-medium leading-[18px]"
+          style={{ color: senderColor(message.senderId) }}
+        >
+          {message.senderName}
+        </p>
+      )}
+
       {message.forwarded && (
         <p className="mb-1 px-1 flex items-center gap-1 text-[12.5px] italic text-[color:var(--wa-bubble-meta)]">
           <Forward size={13} /> Forwarded
@@ -290,7 +312,7 @@ export default function MessageBubble({
       {/* Text & Meta */}
       {message.text ? (
         <p className="whitespace-pre-wrap break-words px-1 pt-1 text-[14.2px] leading-[19px] text-[color:var(--wa-bubble-text)]">
-          {message.text}
+                   <HighlightedText text={message.text} query={highlight} />
           <span className={`${metaClass} float-right -mb-[2px] ml-[10px] mt-[4px]`}>{meta}</span>
         </p>
       ) : (

@@ -41,6 +41,7 @@ export function formatMessage(message, currentUserId) {
     attachments: message.attachments || [],
     time: formatMessageTime(message.createdAt),
     sender: String(senderId) === String(currentUserId) ? "me" : "other",
+    senderId: String(senderId),
     senderName: message.sender?.name?.trim() || message.sender?.username || "",
     senderAvatar: message.sender?.avatar || message.sender?.profilePicture || null,
     createdAt: message.createdAt,
@@ -101,7 +102,25 @@ export function useChatMessages({
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isHistory, setIsHistory] = useState(false);
+  const isHistoryRef = useRef(false);
   const loadRequestId = useRef(0);
+
+    // Older messages (loaded when scrolling up)
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [olderFailed, setOlderFailed] = useState(false);
+  const messagesRef = useRef([]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  
+  useEffect(() => {
+    isHistoryRef.current = isHistory;
+  }, [isHistory]);
+
 
   const updateMessage = useCallback((messageId, updater) => {
     setMessages((prev) => prev.map((m) => (m.id === messageId ? updater(m) : m)));
@@ -123,6 +142,13 @@ export function useChatMessages({
   // 1. Initial REST Load
   const loadMessages = useCallback(async () => {
     const requestId = ++loadRequestId.current;
+
+        setIsHistory(false);
+    setHasMore(false);
+    setIsLoadingOlder(false);
+    setOlderFailed(false);
+
+        setIsHistory(false);
 
     if (!chatId) {
       setMessages([]);
@@ -153,6 +179,66 @@ export function useChatMessages({
     }
   }, [chatId, currentUserId]);
 
+
+    // Opens the part of the history around one message (used by search results).
+  // Returns true when it worked.
+  const loadAround = useCallback(
+    async (messageId) => {
+      if (!chatId) return false;
+
+      const requestId = ++loadRequestId.current;
+
+      try {
+        const response = await api.get(`/conversations/${chatId}/messages`, {
+          params: { around: messageId },
+        });
+
+        if (requestId !== loadRequestId.current) return false;
+
+        setMessages((response.data.messages || []).map((m) => formatMessage(m, currentUserId)));
+        setIsHistory(Boolean(response.data.hasNewer));
+          setHasMore(Boolean(response.data.hasMore));
+        setOlderFailed(false);
+
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [chatId, currentUserId]
+  );
+
+    // Loads the next page of older messages (called when scrolling to the top).
+  const loadOlder = useCallback(async () => {
+    const oldest = messagesRef.current[0];
+
+    if (!chatId || !hasMore || isLoadingOlder || !oldest) return;
+
+    // A chat switch or reload changes this number, which cancels this request.
+    const requestId = loadRequestId.current;
+
+    setIsLoadingOlder(true);
+    setOlderFailed(false);
+
+    try {
+      const response = await api.get(`/conversations/${chatId}/messages`, {
+        params: { before: oldest.id },
+      });
+
+      if (requestId !== loadRequestId.current) return;
+
+      const older = (response.data.messages || []).map((m) => formatMessage(m, currentUserId));
+
+      setMessages((prev) => mergeMessages(prev, older));
+      setHasMore(Boolean(response.data.hasMore));
+    } catch {
+      if (requestId === loadRequestId.current) setOlderFailed(true);
+    } finally {
+      if (requestId === loadRequestId.current) setIsLoadingOlder(false);
+    }
+  }, [chatId, currentUserId, hasMore, isLoadingOlder]);
+
+
   useEffect(() => {
     loadMessages();
   }, [loadMessages]);
@@ -173,7 +259,9 @@ export function useChatMessages({
       if (String(incomingId) !== conversationId) return;
 
       const formatted = formatMessage(message, currentUserId);
-      setMessages((prev) => addMessageWithoutDuplicate(prev, formatted));
+       if (!isHistoryRef.current) {
+        setMessages((prev) => addMessageWithoutDuplicate(prev, formatted));
+      }
       notifySidebar(formatted);
 
       const senderId = message.sender?._id || message.sender;
@@ -218,11 +306,21 @@ export function useChatMessages({
     }
 
     // Double Blue Tick Listener
-    function handleRead(payload) {
+       function handleRead(payload) {
       if (String(payload.conversationId) !== conversationId) return;
-      onMessageStatusChange?.(conversationId, "read");
+
+      // Groups send only the messages that EVERY member has now read.
+      const readIds = payload.messageIds
+        ? new Set(payload.messageIds.map(String))
+        : null;
+
+      onMessageStatusChange?.(conversationId, "read", payload.messageIds || []);
       setMessages((prev) =>
-        prev.map((m) => (m.sender === "me" ? { ...m, status: "read" } : m))
+        prev.map((m) =>
+          m.sender === "me" && (!readIds || readIds.has(m.id))
+            ? { ...m, status: "read" }
+            : m
+        )
       );
     }
 
@@ -257,5 +355,11 @@ export function useChatMessages({
     error,
     reload: loadMessages,
     updateMessage,
+     isHistory,
+    loadAround,
+    hasMore,
+    isLoadingOlder,
+    olderFailed,
+    loadOlder,
   };
 }

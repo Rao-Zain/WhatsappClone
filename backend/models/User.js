@@ -65,6 +65,11 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+        // When the calls page was last opened (missed calls after this are "new").
+    callsSeenAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

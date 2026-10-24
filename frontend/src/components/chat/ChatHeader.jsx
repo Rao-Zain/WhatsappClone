@@ -11,7 +11,7 @@ const initialsOf = (name = "") =>
     .join("")
     .toUpperCase() || "?";
 
-export default function ChatHeader({ chat, onBack, onOpenInfo, onStartCall  }) {
+export default function ChatHeader({ chat, onBack, onOpenInfo, onOpenSearch, searchActive = false, onStartCall }) {
   const showPresence = chat.type === "personal" && chat.userId;
 
   const iconBtn =
@@ -63,7 +63,7 @@ export default function ChatHeader({ chat, onBack, onOpenInfo, onStartCall  }) {
                 />
               ) : (
                 chat.type === "group" && (
-                  <span className="text-[color:var(--wa-chat-subtitle)]">click here for group info</span>
+                 <span className="text-[color:var(--wa-chat-subtitle)]">{chat.memberNames || "group"}</span>
                 )
               )}
             </div>
@@ -93,7 +93,15 @@ export default function ChatHeader({ chat, onBack, onOpenInfo, onStartCall  }) {
 >
   <Phone size={21} strokeWidth={2.1} />
 </button>
-        <button type="button" aria-label="Search inside chat" title="Search" className={`${iconBtn} hidden sm:grid`}>
+               <button
+          type="button"
+          aria-label="Search inside chat"
+          title="Search"
+          aria-pressed={searchActive}
+          disabled={!onOpenSearch}
+          onClick={onOpenSearch}
+          className={`${iconBtn} hidden sm:grid ${searchActive ? "bg-[var(--wa-hover)]" : ""}`}
+        >
           <Search size={21} strokeWidth={2.2} />
         </button>
         <button type="button" aria-label="More options" title="Menu" className={iconBtn}>

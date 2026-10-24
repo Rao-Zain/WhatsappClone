@@ -6,6 +6,12 @@ import { createHash, randomInt } from "node:crypto";
 import User from "../models/User.js";
 import PendingRegistration from "../models/PendingRegistration.js";
 import { sendOtpEmail } from "../utils/sendOtpEmail.js";
+import { broadcastProfileUpdate } from "../socket/socket.js";
+import {
+  saveAvatar,
+  deleteAvatarByUrl,
+  getPublicBaseUrl,
+} from "../utils/avatarStorage.js";
 
 function createToken(user) {
   if (!process.env.JWT_SECRET) {
@@ -588,12 +594,17 @@ export const updateProfile = async (req, res) => {
   updates.name = cleanName;
 }
 
-
-    const updatedUser = await User.findByIdAndUpdate(
+ const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
       { $set: updates },
       { new: true, runValidators: true }
     ).select("-password -otp -otpExpires");
+
+    // ADD THIS: `updates` only contains the fields that actually changed
+    broadcastProfileUpdate(req.app.get("io"), req.user._id, updates);
+       
+
+    
 
     return res.status(200).json({
       success: true,
@@ -618,10 +629,6 @@ export const updateProfile = async (req, res) => {
 };
 
 
-/**
- * PATCH /api/auth/profile-picture
- * Updates the profile photo of the authenticated user.
- */
 export async function updateProfilePicture(req, res) {
   try {
     const { profilePicture } = req.body;
@@ -633,46 +640,54 @@ export async function updateProfilePicture(req, res) {
       });
     }
 
-    // This endpoint accepts cropped JPEG, PNG, or WebP data URLs.
-    const allowedImage =
-      /^data:image\/(jpeg|png|webp);base64,/i;
+    // Accepts cropped JPEG, PNG, or WebP data URLs from the cropper.
+    const match =
+      /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]*={0,2})$/i.exec(
+        profilePicture
+      );
 
-    if (!allowedImage.test(profilePicture)) {
+    if (!match) {
       return res.status(400).json({
         success: false,
         message: "Upload a valid JPEG, PNG, or WebP image.",
       });
     }
 
-    const base64Data = profilePicture.split(",")[1];
+    const buffer = Buffer.from(match[2], "base64");
 
-    if (
-      !base64Data ||
-      !/^[A-Za-z0-9+/]*={0,2}$/.test(base64Data)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "The image data is invalid.",
-      });
-    }
-
-    // Keep stored images small to protect MongoDB document size.
-    const imageSizeInBytes = Buffer.from(
-      base64Data,
-      "base64"
-    ).length;
-
-    if (imageSizeInBytes > 1024 * 1024) {
+    if (buffer.length > 1024 * 1024) {
       return res.status(413).json({
         success: false,
         message: "The cropped image must be 1 MB or smaller.",
       });
     }
 
-    // req.user comes from the JWT authentication middleware.
-    // Replacing this field replaces the old stored image.
-    req.user.profilePicture = profilePicture;
+    let fileUrl;
+
+    try {
+      fileUrl = await saveAvatar(buffer, match[1], getPublicBaseUrl(req));
+    } catch (error) {
+      if (error.code === "INVALID_IMAGE") {
+        return res.status(400).json({
+          success: false,
+          message: "The image data is invalid.",
+        });
+      }
+      throw error;
+    }
+
+    const previousPicture = req.user.profilePicture;
+
+    req.user.profilePicture = fileUrl;
     await req.user.save();
+
+    // Remove the old file so the folder doesn't fill up.
+    await deleteAvatarByUrl(previousPicture);
+
+    // Broadcast to contacts (now only a short URL, not a 1 MB string).
+    broadcastProfileUpdate(req.app.get("io"), req.user._id, {
+      profilePicture: fileUrl,
+    });
 
     return res.status(200).json({
       success: true,
