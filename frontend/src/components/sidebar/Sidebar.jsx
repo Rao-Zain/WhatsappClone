@@ -9,7 +9,10 @@ import ChatList from "./ChatList";
 import MobileBottomNav from "./MobileBottomNav";
 // import, under the NewChatView import
 import NewGroupView from "./NewGroupView";
- 
+ import useChatRequests from "../chatRequests/useChatRequests";
+import ChatRequestsView from "../chatRequests/ChatRequestsView";
+import BlockedContactsView from "../chatRequests/BlockedContactsView";
+import RequestsRow from "../chatRequests/RequestsRow";
 
 /* Phone: full width. Tablet: 380. Laptop: 410. Wide screens: ~30% (410–480). */
 const ASIDE =
@@ -24,7 +27,7 @@ export default function Sidebar({
   isNewChat,
   onNewChat,
   onBackFromNewChat,
-  onSelectNewChatUser,
+   onOpenConversation,
   isNewGroup,
   onNewGroup,
   onBackFromNewGroup,
@@ -39,7 +42,9 @@ export default function Sidebar({
 
   const [activeFilter, setActiveFilter] = useState("all");
   const [showStarred, setShowStarred] = useState(false);
-
+  const [showRequests, setShowRequests] = useState(false);
+  const [showBlocked, setShowBlocked] = useState(false);
+  const chatRequests = useChatRequests();
   const filteredChats = useMemo(() => {
     const query = (activeSearch || "").trim().toLowerCase();
 
@@ -71,7 +76,30 @@ export default function Sidebar({
   if (isNewChat) {
     return (
       <aside className={ASIDE}>
-        <NewChatView onBack={onBackFromNewChat} onSelectUser={onSelectNewChatUser} />
+       <NewChatView onBack={onBackFromNewChat} onOpenConversation={onOpenConversation} />
+      </aside>
+    );
+  }
+
+    if (showRequests) {
+    return (
+      <aside className={ASIDE}>
+        <ChatRequestsView
+          requests={chatRequests}
+          onBack={() => setShowRequests(false)}
+          onAccepted={(conversation) => {
+            setShowRequests(false);
+            onOpenConversation?.(conversation);
+          }}
+        />
+      </aside>
+    );
+  }
+
+  if (showBlocked) {
+    return (
+      <aside className={ASIDE}>
+        <BlockedContactsView onBack={() => setShowBlocked(false)} />
       </aside>
     );
   }
@@ -97,6 +125,9 @@ export default function Sidebar({
         onNewChat={onNewChat}
         onNewGroup={onNewGroup}
         onOpenStarred={() => setShowStarred(true)}
+                onOpenRequests={() => setShowRequests(true)}
+        onOpenBlocked={() => setShowBlocked(true)}
+        requestCount={chatRequests.incoming.length}
         onLogout={onLogout}
       />
       <SearchBar value={activeSearch} onChange={handleSearchChange} />
@@ -107,6 +138,7 @@ export default function Sidebar({
       />
       {/* Archived + chats scroll together, like WhatsApp Web */}
       <div className="whatsapp-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
+               <RequestsRow count={chatRequests.incoming.length} onClick={() => setShowRequests(true)} />
         <ArchivedRow />
         <ChatList chats={filteredChats} selectedChatId={selectedChatId} onSelectChat={onSelectChat} />
       </div>

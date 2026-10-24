@@ -11,7 +11,7 @@ import {
   serializeMessage,
 } from "../utils/serializeMessage.js";
 import { hasOnlineRecipient } from "../utils/messageDelivery.js";
-
+import { getBlockedMessage } from "../utils/blocks.js";
 // userId -> Set of socket IDs (a user can have several tabs/devices open)
 const onlineUsers = new Map();
 
@@ -311,6 +311,15 @@ export default function initializeSocket(io) {
             message: "You are not a participant in this conversation",
           });
         }
+        const blockedMessage = await getBlockedMessage(conversation, userId);
+
+        if (blockedMessage) {
+          return reply({
+            success: false,
+            message: blockedMessage,
+          });
+        }
+
 
         // Only accept a reply target from this same conversation.
         const replyToId = await resolveReplyTarget(

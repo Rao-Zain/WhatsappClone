@@ -2,6 +2,7 @@ import Conversation from "../models/Conversation.js"; // adjust path/name
 import mongoose from "mongoose";
 import Call from "../models/Call.js";
 import { CALL_POPULATE, serializeCall } from "../controllers/callController.js";
+import { getBlockedMessage } from "../utils/blocks.js";
 
 const RING_TIMEOUT_MS = 45_000;
 const MAX_PARTICIPANTS = 6; // mesh limit
@@ -100,6 +101,12 @@ export default function registerCallHandlers(io, socket) {
             if (!members.includes(userId)) {
                 return ack?.({ ok: false, error: "You are not in this conversation." });
             }
+
+                        const blockedMessage = await getBlockedMessage(conversation, userId);
+            if (blockedMessage) {
+                return ack?.({ ok: false, error: blockedMessage });
+            }
+
             if (calls.has(conversationId)) {
                 return ack?.({ ok: false, error: "A call is already in progress here." });
             }

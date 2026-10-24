@@ -7,6 +7,7 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { REPLY_POPULATE, serializeMessage } from "../utils/serializeMessage.js";
 import { hasOnlineRecipient } from "../utils/messageDelivery.js";
+import { getBlockedMessage } from "../utils/blocks.js";
 
 const uploadDirectory = path.resolve("uploads/attachments");
 
@@ -310,6 +311,15 @@ export async function forwardMessage(req, res) {
 
     if (targets.length !== conversationIds.length) {
       return fail(res, 404, "One or more chats were not found.");
+    }
+
+    
+    for (const target of targets) {
+      const blockedMessage = await getBlockedMessage(target, req.user._id);
+
+      if (blockedMessage) {
+        return fail(res, 403, blockedMessage);
+      }
     }
 
     const original = await Message.findById(message._id).select(
