@@ -1,5 +1,6 @@
 
 import mongoose from "mongoose";
+import { generatePin } from "../utils/chatPin.js";
 
 const userSchema = new mongoose.Schema(
   {
@@ -54,6 +55,15 @@ const userSchema = new mongoose.Schema(
     about: {
       type: String,
       default: "Hey there! I am using WhatsApp.",
+    },
+
+        // Secret 4-digit PIN. Someone who knows your username AND this PIN can
+    // send you a chat request. Never returned unless explicitly selected.
+    chatPin: {
+      type: String,
+      default: () => generatePin(),
+      match: /^\d{4}$/,
+      select: false,
     },
 
     isOnline: {

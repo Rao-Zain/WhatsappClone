@@ -6,6 +6,7 @@ import { createHash, randomInt } from "node:crypto";
 import User from "../models/User.js";
 import PendingRegistration from "../models/PendingRegistration.js";
 import { sendOtpEmail } from "../utils/sendOtpEmail.js";
+import { generatePin } from "../utils/chatPin.js";
 import { broadcastProfileUpdate } from "../socket/socket.js";
 import {
   saveAvatar,
@@ -504,26 +505,66 @@ export async function login(req, res) {
   }
 }
 
-// GET /api/auth/me
+// Users created before the PIN feature have no PIN yet: give them one the
+// first time they ask. (The schema default is not applied to old documents
+// that are loaded without the field, so this writes it explicitly.)
+async function ensureChatPin(userId) {
+  await User.updateOne(
+    { _id: userId, chatPin: { $exists: false } },
+    { $set: { chatPin: generatePin() } }
+  );
 
-export async function getMe(req, res) {
-  return res.status(200).json({
-    success: true,
-    user: {
-      id: req.user._id,
-      name: req.user.name || "",
-      username: req.user.username,
-      email: req.user.email,
-      phone: req.user.phone,
-      profilePicture: req.user.profilePicture,
-      about: req.user.about,
-      emailVerified: req.user.emailVerified,
-      createdAt: req.user.createdAt,
-    },
-  });
+  const withPin = await User.findById(userId).select("+chatPin").lean();
+
+  return withPin?.chatPin || "";
 }
 
+export async function getMe(req, res) {
+  try {
+    const chatPin = await ensureChatPin(req.user._id);
 
+    return res.status(200).json({
+      success: true,
+      user: {
+        id: req.user._id,
+        name: req.user.name || "",
+        username: req.user.username,
+        email: req.user.email,
+        phone: req.user.phone,
+        profilePicture: req.user.profilePicture,
+        about: req.user.about,
+        emailVerified: req.user.emailVerified,
+        createdAt: req.user.createdAt,
+        chatPin,
+      },
+    });
+  } catch (error) {
+    console.error("Get me error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load your account.",
+    });
+  }
+}
+
+// POST /api/auth/regenerate-pin  - use if your PIN was shared by mistake
+export async function regenerateChatPin(req, res) {
+  try {
+    const chatPin = generatePin();
+
+    await User.updateOne({ _id: req.user._id }, { $set: { chatPin } });
+
+    return res.status(200).json({ success: true, chatPin });
+  } catch (error) {
+    console.error("Regenerate PIN error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to generate a new PIN.",
+    });
+  }
+}
 
 
 export const updateProfile = async (req, res) => {

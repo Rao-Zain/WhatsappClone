@@ -168,6 +168,10 @@ function formatConversation(conversation, currentUserId) {
     unread: Number(conversation.unreadCount || 0),
 
     type: isGroup ? "group" : "personal",
+    
+    // Block state with the other person (private chats only).
+    blockedByMe: isGroup ? false : Boolean(conversation.blockedByMe),
+    blockedByOther: isGroup ? false : Boolean(conversation.blockedByOther),
     favorite: false,
         sent:
       senderId && lastMessage?.type !== "system"
@@ -182,8 +186,7 @@ export default function AppLayout() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [isNewChat, setIsNewChat] = useState(false);
-  const [creatingConversation, setCreatingConversation] =
-    useState(false);
+
   const [actionError, setActionError] = useState("");
   const { user, setUser } = useAuth();
     const { refreshNavCounts } = useNavCounts();
@@ -646,53 +649,57 @@ const getUserAvatar = (userId) =>
     );
   }
 
-  async function handleSelectNewChatUser(user) {
-    if (creatingConversation) return;
+  // A chat now starts only after the other person accepts a request, so the
+  // conversation already exists on the server: just show it and open it.
+  function handleOpenConversation(conversation) {
+    if (!conversation) return;
 
-    try {
-      setCreatingConversation(true);
-      setActionError("");
+    const formattedChat = formatConversation(conversation, getCurrentUserId());
 
-      const response = await api.post("/conversations", {
-        participantId: user._id,
-      });
+    setChats((previousChats) => {
+      const existing = previousChats.find((chat) => chat.id === formattedChat.id);
 
-      const conversation = response.data.conversation;
-      const currentUserId = getCurrentUserId();
+      const chatToUse = existing
+        ? { ...formattedChat, unread: existing.unread }
+        : formattedChat;
 
-      const formattedChat = formatConversation(
-        conversation,
-        currentUserId
-      );
+      return [
+        chatToUse,
+        ...previousChats.filter((chat) => chat.id !== formattedChat.id),
+      ];
+    });
 
-      setChats((previousChats) => {
-        const existing = previousChats.find(
-          (chat) => chat.id === formattedChat.id
-        );
-
-        const chatToUse = existing
-          ? { ...formattedChat, unread: existing.unread }
-          : formattedChat;
-
-        return [
-          chatToUse,
-          ...previousChats.filter(
-            (chat) => chat.id !== formattedChat.id
-          ),
-        ];
-      });
-
-      handleSelectChat(formattedChat.id);
-      setIsNewChat(false);
-    } catch (err) {
-      setActionError(
-        err.response?.data?.message ||
-        "Unable to start this conversation. Please try again."
-      );
-    } finally {
-      setCreatingConversation(false);
-    }
+    handleSelectChat(formattedChat.id);
+    setIsNewChat(false);
   }
+
+  // Someone blocked / unblocked: update the chat with that person.
+  // Used by the live socket event and right after my own block / unblock click.
+  const applyBlockChange = useCallback((change) => {
+    const userId = String(change.userId);
+
+    setChats((previousChats) =>
+      previousChats.map((chat) =>
+        chat.type === "personal" && chat.userId === userId
+          ? {
+              ...chat,
+              ...(change.blockedByMe !== undefined && { blockedByMe: change.blockedByMe }),
+              ...(change.blockedByOther !== undefined && { blockedByOther: change.blockedByOther }),
+            }
+          : chat
+      )
+    );
+  }, []);
+
+  useEffect(() => {
+    const socket = getSocket();
+
+    socket.on("block:updated", applyBlockChange);
+
+    return () => {
+      socket.off("block:updated", applyBlockChange);
+    };
+  }, [applyBlockChange]);
 
     // Opening the calls page clears the missed-call badge.
   const callCount = callHistory.calls.length;
@@ -862,17 +869,12 @@ const getUserAvatar = (userId) =>
               setIsNewChat(true);
             }}
             onBackFromNewChat={() => setIsNewChat(false)}
-            onSelectNewChatUser={handleSelectNewChatUser}
+                        onOpenConversation={handleOpenConversation}
           />
 
            )}
 
-          {creatingConversation && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 text-sm text-[#667781]">
-              Starting conversation...
-            </div>
-          )}
-
+        
           {actionError && (
             <div
               role="alert"
@@ -933,6 +935,7 @@ const getUserAvatar = (userId) =>
             onStartCall={call.startCall}
                         onGroupUpdated={applyConversationUpdate}
             onGroupLeft={handleGroupLeft}
+                        onBlockChange={applyBlockChange}
           />
            )}
 

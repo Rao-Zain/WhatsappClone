@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Camera, LogOut, MoreVertical, Palette, Star, Users  } from "lucide-react";
+import { Ban, Camera, KeyRound, LogOut, MoreVertical, Palette, Star, UserPlus, Users } from "lucide-react";
+import MyPinModal from "../chatRequests/MyPinModal";
 import ThemeModal from "../../theme/ThemeModal";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../../lib/api";
@@ -54,13 +55,22 @@ function LogoutDialog({ onCancel, onConfirm }) {
   );
 }
 
-export default function SidebarHeader({ onNewChat, onNewGroup, onOpenStarred, onLogout }) {
+export default function SidebarHeader({
+  onNewChat,
+  onNewGroup,
+  onOpenStarred,
+  onOpenRequests,
+  onOpenBlocked,
+  requestCount = 0,
+  onLogout,
+}) {
   const navigate = useNavigate();
   const auth = useAuth() || {};
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
+    const [pinOpen, setPinOpen] = useState(false);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -148,6 +158,25 @@ export default function SidebarHeader({ onNewChat, onNewGroup, onOpenStarred, on
                   <Users size={18} className="text-[color:var(--wa-menu-icon)]" />
                   New group
                 </button>
+                <button type="button" role="menuitem" className={menuItem} onClick={run(onOpenRequests)}>
+                  <UserPlus size={18} className="text-[color:var(--wa-menu-icon)]" />
+                  <span className="flex-1">Chat requests</span>
+                  {requestCount > 0 && (
+                    <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[var(--wa-accent)] px-1.5 text-[12px] font-medium text-[color:var(--wa-accent-fg)]">
+                      {requestCount}
+                    </span>
+                  )}
+                </button>
+
+                <button type="button" role="menuitem" className={menuItem} onClick={run(onOpenBlocked)}>
+                  <Ban size={18} className="text-[color:var(--wa-menu-icon)]" />
+                  Blocked contacts
+                </button>
+
+                <button type="button" role="menuitem" className={menuItem} onClick={run(() => setPinOpen(true))}>
+                  <KeyRound size={18} className="text-[color:var(--wa-menu-icon)]" />
+                  My chat PIN
+                </button>
 
                 <button type="button" role="menuitem" className={menuItem} onClick={run(onOpenStarred)}>
                   <Star size={18} className="text-[color:var(--wa-menu-icon)]" />
@@ -182,6 +211,7 @@ export default function SidebarHeader({ onNewChat, onNewGroup, onOpenStarred, on
       </div>
 
       {themeOpen && <ThemeModal onClose={() => setThemeOpen(false)} />}
+              {pinOpen && <MyPinModal onClose={() => setPinOpen(false)} />}
       {logoutOpen && <LogoutDialog onCancel={() => setLogoutOpen(false)} onConfirm={performLogout} />}
     </header>
   );

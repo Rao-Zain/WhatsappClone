@@ -12,6 +12,8 @@ import ChatSearchPanel from "./ChatSearchPanel";
 import { useChatMessages } from "./useChatMessages";
 import { useMessageActions } from "./useMessageActions";
 import api from "../../../lib/api";
+import BlockDialog from "./BlockDialog";
+import BlockedBar from "./BlockedBar";
 
 const DELETE_FOR_EVERYONE_WINDOW_MS = 48 * 60 * 60 * 1000;
 
@@ -35,6 +37,7 @@ export default function ChatWindow({
   onStartCall,
     onGroupUpdated,
   onGroupLeft,
+    onBlockChange,
 }) {
   const currentUserId = getCurrentUserId();
   const chatId = chat?.id;
@@ -49,6 +52,8 @@ export default function ChatWindow({
   const [isDeleting, setIsDeleting] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [mediaSlides, setMediaSlides] = useState([]);
+    const [blockDialogOpen, setBlockDialogOpen] = useState(false);
+  const [blockBusy, setBlockBusy] = useState(false);
    // Side panels: group info or message search (switching chats closes them).
   const [infoChatId, setInfoChatId] = useState(null);
   const [search, setSearch] = useState({ chatId: null, query: "" });
@@ -106,6 +111,7 @@ export default function ChatWindow({
     setForwardingMessage(null);
     setDeletingMessage(null);
     setLightboxIndex(-1);
+        setBlockDialogOpen(false);
   }, [chatId]);
 
   if (!chat) return <EmptyChat />;
@@ -144,6 +150,35 @@ export default function ChatWindow({
 
     await sendMessage(text, files, kind, replyingTo?.id);
     setReplyingTo(null);
+  };
+
+    const handleBlock = async () => {
+    if (blockBusy || !chat.userId) return;
+    setBlockBusy(true);
+    try {
+      await api.post(`/blocks/${chat.userId}`);
+      onBlockChange?.({ userId: chat.userId, blockedByMe: true });
+      setBlockDialogOpen(false);
+      showNotice("Contact blocked");
+    } catch (err) {
+      showNotice(err.response?.data?.message || "Failed to block contact");
+    } finally {
+      setBlockBusy(false);
+    }
+  };
+
+  const handleUnblock = async () => {
+    if (blockBusy || !chat.userId) return;
+    setBlockBusy(true);
+    try {
+      await api.delete(`/blocks/${chat.userId}`);
+      onBlockChange?.({ userId: chat.userId, blockedByMe: false });
+      showNotice("Contact unblocked");
+    } catch (err) {
+      showNotice(err.response?.data?.message || "Failed to unblock contact");
+    } finally {
+      setBlockBusy(false);
+    }
   };
 
   const handleMediaClick = (url) => {
@@ -196,6 +231,8 @@ export default function ChatWindow({
                 onOpenInfo={chat.type === "group" ? openInfo : undefined}
         onOpenSearch={openSearch}
         searchActive={searchOpen}
+                onBlock={() => setBlockDialogOpen(true)}
+        onUnblock={handleUnblock}
       />
 
       {/* Message List Area */}
@@ -249,16 +286,33 @@ export default function ChatWindow({
 
       {/* Message Input Composer */}
       <div className="relative z-20 w-full shrink-0">
-        <MessageComposer
-          conversationId={chatId}
-          onSendMessage={handleSendMessage}
-          isSending={isSending}
-          uploadProgress={uploadProgress}
-          replyTo={replyingTo}
-          onCancelReply={() => setReplyingTo(null)}
-        />
+               {chat.blockedByMe || chat.blockedByOther ? (
+          <BlockedBar
+            blockedByMe={chat.blockedByMe}
+            name={chat.name}
+            busy={blockBusy}
+            onUnblock={handleUnblock}
+          />
+        ) : (
+          <MessageComposer
+            conversationId={chatId}
+            onSendMessage={handleSendMessage}
+            isSending={isSending}
+            uploadProgress={uploadProgress}
+            replyTo={replyingTo}
+            onCancelReply={() => setReplyingTo(null)}
+          />
+        )}
       </div>
-
+      {blockDialogOpen && (
+        <BlockDialog
+          name={chat.name}
+          busy={blockBusy}
+          onCancel={() => setBlockDialogOpen(false)}
+          onConfirm={handleBlock}
+        />
+      )}
+      
       {/* Modals, Lightbox & Overlays */}
       <ChatModals
         menu={menu}

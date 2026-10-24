@@ -5,6 +5,7 @@ import User from "../models/User.js";
 import { REPLY_POPULATE, resolveReplyTarget, serializeMessage } from "../utils/serializeMessage.js";
 import { hasOnlineRecipient } from "../utils/messageDelivery.js";
 import { countMissedCalls } from "./callController.js";   // with the other imports
+import { getBlockedMessage, getBlockStates } from "../utils/blocks.js";
 import fs from "fs";
 import path from "path";
 
@@ -46,11 +47,15 @@ export async function createConversation(req, res) {
         $size: 2,
       },
     });
+    
 
+     // New chats are no longer created directly: the other person has to
+    // accept a chat request first (POST /api/chat-requests).
     if (!conversation) {
-      conversation = await Conversation.create({
-        type: "private",
-        participants: [currentUserId, otherUser._id],
+      return res.status(403).json({
+        success: false,
+        message:
+          "Send this user a chat request first. You can chat once they accept.",
       });
     }
 
@@ -370,6 +375,21 @@ export async function getConversations(req, res) {
       })
       .sort({ updatedAt: -1 });
 
+        // One query for every block that involves the people in these chats.
+    const otherIds = [];
+
+    for (const conversation of conversations) {
+      if (conversation.type !== "private") continue;
+
+      const other = conversation.participants.find(
+        (participant) => String(participant._id) !== String(currentUserId)
+      );
+
+      if (other) otherIds.push(other._id);
+    }
+
+    const blockStates = await getBlockStates(currentUserId, otherIds);
+
     const conversationsWithUnread = await Promise.all(
       conversations.map(async (conversation) => {
         const unreadCount = await Message.countDocuments({
@@ -378,9 +398,20 @@ export async function getConversations(req, res) {
           readBy: { $ne: currentUserId },
         });
 
+        let blockFlags = { blockedByMe: false, blockedByOther: false };
+
+        if (conversation.type === "private") {
+          const other = conversation.participants.find(
+            (participant) => String(participant._id) !== String(currentUserId)
+          );
+
+          blockFlags = blockStates.get(String(other?._id)) || blockFlags;
+        }
+
         return {
           ...conversation.toObject(),
           unreadCount,
+          ...blockFlags,
         };
       })
     );
@@ -722,6 +753,15 @@ export async function sendMessage(req, res) {
       });
     }
 
+        const blockedMessage = await getBlockedMessage(conversation, req.user._id);
+
+    if (blockedMessage) {
+      return res.status(403).json({
+        success: false,
+        message: blockedMessage,
+      });
+    }
+
     const message = await Message.create({
       conversation: conversation._id,
       sender: req.user._id,
@@ -836,6 +876,22 @@ export async function uploadMessage(req, res) {
       return res.status(404).json({
         success: false,
         message: "Conversation not found.",
+      });
+    }
+
+        const blockedMessage = await getBlockedMessage(conversation, req.user._id);
+
+    if (blockedMessage) {
+      // The files were already saved by multer; remove them.
+      await Promise.all(
+        uploadedFiles.map((file) =>
+          fs.promises.unlink(file.path).catch(() => {})
+        )
+      );
+
+      return res.status(403).json({
+        success: false,
+        message: blockedMessage,
       });
     }
 
