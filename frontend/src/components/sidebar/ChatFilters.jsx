@@ -2,9 +2,9 @@ import { Plus } from "lucide-react";
 
 export const DEFAULT_FILTERS = [
   { label: "All", value: "all" },
-  { label: "Unread", value: "unread", count: 83 },
+  { label: "Unread", value: "unread" },
   { label: "Favorites", value: "favorites" },
-  { label: "Groups", value: "groups", count: 21 },
+  { label: "Groups", value: "groups" },
 ];
 
 export default function ChatFilters({ activeFilter, onChange, filters = DEFAULT_FILTERS }) {

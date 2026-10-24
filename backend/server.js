@@ -11,6 +11,7 @@ import conversationRoutes from "./routes/conversationRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
 import path from "path";
 import { avatarDirectory } from "./utils/avatarStorage.js";
+import callRoutes from "./routes/callRoutes.js";   // with the other route imports
 
 dotenv.config();
 
@@ -39,6 +40,7 @@ app.use(
 app.use("/api/auth", authRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/calls", callRoutes);                  // under app.use("/api/messages", messageRoutes);
 
 // Socket.IO
 const io = new Server(httpServer, {

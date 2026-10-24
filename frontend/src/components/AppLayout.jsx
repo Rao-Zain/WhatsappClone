@@ -1,24 +1,23 @@
 
-import { useEffect, useState } from "react";
-
+import { useEffect, useMemo, useState } from "react";
 import api from "../../lib/api";
 import { getSocket } from "../../lib/socket";
 import NavigationRail from "./layout/NavigationRail";
 import Sidebar from "./sidebar/Sidebar";
 import ChatWindow from "./chat/ChatWindow";
 import { useAuth } from "../context/AuthContext";
+import { useNavCounts } from "../context/NavCountsContext";
 import { useCallback } from "react";
 import { PresenceProvider } from "../context/PresenceContext";
 import useCall from "../hooks/useCall";
 import CallOverlay from "../components/call/CallOverlay";
 import useAppSounds from "../hooks/useAppSounds";
+import { useLocation, useNavigate } from "react-router-dom";
+import CallsSidebar from "./calls/CallsSidebar";
+import CallsMain from "./calls/CallsMain";
+import { useCallHistory } from "./calls/useCallHistory";
 import {
-  requestNotificationPermission,
-  showNotification,
-  isAppActive,
-} from "../../lib/notifications";
-// Inside AppLayout:
-
+  requestNotificationPermission, showNotification, isAppActive } from "../../lib/notifications";
 
 
 function getCurrentUser() {
@@ -187,6 +186,12 @@ export default function AppLayout() {
     useState(false);
   const [actionError, setActionError] = useState("");
   const { user, setUser } = useAuth();
+    const { refreshNavCounts } = useNavCounts();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const view = location.pathname.startsWith("/app/calls") ? "calls" : "chats";
+  const callHistory = useCallHistory({ enabled: view === "calls" });
+  const [selectedCallId, setSelectedCallId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const socket = getSocket();
   const call = useCall(socket);
@@ -323,6 +328,7 @@ const getUserAvatar = (userId) =>
     };
   }, []);
 
+  // replace handleConversationRead
   const handleConversationRead = useCallback((conversationId) => {
     setChats((previous) =>
       previous.map((chat) =>
@@ -331,7 +337,10 @@ const getUserAvatar = (userId) =>
           : chat
       )
     );
-  }, []);
+
+    // The nav badges come from the server: ask for fresh numbers.
+    refreshNavCounts();
+  }, [refreshNavCounts]);
 
   // Listen for incoming messages globally, not just in ChatWindow.
   useEffect(() => {
@@ -358,7 +367,7 @@ const getUserAvatar = (userId) =>
         senderId === String(currentUserId);
 
       const isSelectedConversation =
-        String(selectedChatId) === conversationId;
+        view === "chats" && String(selectedChatId) === conversationId;
 
       if (!isOwnMessage && message.type !== "system") {
         const active = isAppActive();
@@ -508,7 +517,7 @@ const getUserAvatar = (userId) =>
       socket.off("message:new", handleNewMessage);
       socket.off("message:deleted", handleDeleted);
     };
-  }, [selectedChatId, playMessage]);
+  }, [selectedChatId, view, playMessage]);
 
 
     // Live profile updates (name, username, about, photo) from other users,
@@ -685,6 +694,38 @@ const getUserAvatar = (userId) =>
     }
   }
 
+    // Opening the calls page clears the missed-call badge.
+  const callCount = callHistory.calls.length;
+
+  useEffect(() => {
+    if (view !== "calls") return;
+
+    api
+      .post("/calls/seen")
+      .then(refreshNavCounts)
+      .catch(() => {});
+  }, [view, callCount, refreshNavCounts]);
+
+  // "Message" button on a call: go to that chat.
+  function handleMessageFromCall(chatId) {
+    handleSelectChat(chatId);
+    navigate("/app");
+  }
+
+  const selectedCall =
+    callHistory.calls.find((item) => item.id === selectedCallId) || null;
+
+  // Numbers on the "Unread" and "Groups" filter chips (always from ALL chats,
+  // so they don't change while searching).
+  const filterCounts = useMemo(() => {
+    const unreadChats = chats.filter((chat) => chat.unread > 0);
+
+    return {
+      unread: unreadChats.length,
+      groups: unreadChats.filter((chat) => chat.type === "group").length,
+    };
+  }, [chats]);
+
     // I exited a group from the info panel.
   function handleGroupLeft(conversationId) {
     const id = String(conversationId);
@@ -792,11 +833,21 @@ const getUserAvatar = (userId) =>
         />
 
         <div className="relative flex w-[410px] min-w-[340px] shrink-0 flex-col max-[700px]:w-[calc(100%-65px)] max-[700px]:min-w-0">
+          {view === "calls" ? (
+            <CallsSidebar
+              history={callHistory}
+              selectedCallId={selectedCallId}
+              onSelect={(item) => setSelectedCallId(item.id)}
+              onCall={call.startCall}
+              canCall={call.callState === "idle"}
+            />
+          ) : (
           <Sidebar
             chats={filteredChats}
             selectedChatId={selectedChatId}
             onSelectChat={handleSelectChat}
              isNewGroup={isNewGroup}
+             filterCounts={filterCounts}
             onNewGroup={() => {
               setActionError("");
               setIsNewGroup(true);
@@ -813,6 +864,8 @@ const getUserAvatar = (userId) =>
             onBackFromNewChat={() => setIsNewChat(false)}
             onSelectNewChatUser={handleSelectNewChatUser}
           />
+
+           )}
 
           {creatingConversation && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 text-sm text-[#667781]">
@@ -861,8 +914,15 @@ const getUserAvatar = (userId) =>
         </div>
 
         <main className="min-w-0 flex-1 max-[700px]:hidden">
-          {/* <ChatWindow chat={selectedChat} onConversationRead={(id) => setChats((previous) => previous.map((item) => item.id === id ? { ...item, unread: 0 } : item))} /> */}
-          {/* <ChatWindow chat={selectedChat} chats={chats} onConversationRead={handleConversationRead} /> */}
+        {view === "calls" ? (
+            <CallsMain
+              call={selectedCall}
+              calls={callHistory.calls}
+              onCall={call.startCall}
+              onMessage={handleMessageFromCall}
+              canCall={call.callState === "idle"}
+            />
+          ) : (
           <ChatWindow
             chat={selectedChat}
             chats={chats}
@@ -874,6 +934,7 @@ const getUserAvatar = (userId) =>
                         onGroupUpdated={applyConversationUpdate}
             onGroupLeft={handleGroupLeft}
           />
+           )}
 
         </main>
 

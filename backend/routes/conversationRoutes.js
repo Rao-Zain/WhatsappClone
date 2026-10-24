@@ -10,6 +10,8 @@ import {
   sendMessage,
   searchUsersByPhone,
   markConversationRead,
+  searchMessages,
+  getUnreadSummary,
 } from "../controllers/conversationController.js";
 
 import {
@@ -51,6 +53,8 @@ router.get(
 
 router.get("/search-users", searchUsersByPhone);
 
+router.get("/unread-summary", getUnreadSummary);
+
 router.post("/", createConversation);
 router.post("/group", createGroup);
 
@@ -67,6 +71,7 @@ router.get("/", getConversations);
 
 router.post("/:conversationId/read", markConversationRead);
 router.get("/:conversationId/messages", getMessages);
+router.get("/:conversationId/search", searchMessages);
 router.post("/:conversationId/messages", sendMessage);
 router.put("/:conversationId/messages/:messageId/reaction", reactToMessage);
 router.post("/:conversationId/messages/:messageId/star", toggleStarMessage);

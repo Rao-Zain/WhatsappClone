@@ -1,5 +1,7 @@
 import Conversation from "../models/Conversation.js"; // adjust path/name
 import mongoose from "mongoose";
+import Call from "../models/Call.js";
+import { CALL_POPULATE, serializeCall } from "../controllers/callController.js";
 
 const RING_TIMEOUT_MS = 45_000;
 const MAX_PARTICIPANTS = 6; // mesh limit
@@ -17,7 +19,45 @@ function endCall(io, call, reason) {
     // Every member's devices (stops ringing + tears down active calls)
     const payload = { conversationId: call.conversationId, reason };
     call.members.forEach((uid) => io.to(personalRoom(uid)).emit("call:ended", payload));
+        logCallEnded(io, call, reason);
 }
+
+// Saves the finished call and tells every member (each sees it from their own
+// point of view: outgoing, incoming, missed...) so the calls page updates live.
+async function logCallEnded(io, call, reason) {
+    if (!call.logId) return;
+
+    try {
+        const endedAt = new Date();
+        const durationSeconds = call.answeredAt
+            ? Math.max(0, Math.round((endedAt - call.answeredAt) / 1000))
+            : 0;
+
+        const log = await Call.findByIdAndUpdate(
+            call.logId,
+            {
+                endedAt,
+                durationSeconds,
+                answeredAt: call.answeredAt || null,
+                endReason: reason,
+                joined: [...call.joinedSet],
+                declinedBy: [...call.declinedSet],
+            },
+            { new: true }
+        ).populate(CALL_POPULATE);
+
+        if (!log) return;
+
+        call.members.forEach((memberId) => {
+            io.to(personalRoom(memberId)).emit("calls:new", {
+                call: serializeCall(log, memberId),
+            });
+        });
+    } catch (err) {
+        console.error("Could not save the call log", err);
+    }
+}
+
 
 export default function registerCallHandlers(io, socket) {
     // ASSUMPTION: your auth middleware sets socket.userId. Change if it differs.
@@ -83,9 +123,31 @@ export default function registerCallHandlers(io, socket) {
                 members: new Set(members),
                 participants: new Map([[userId, socket.id]]), // userId -> socketId
                 timer: null,
+                // Call history bookkeeping
+                logId: null,
+                answeredAt: null,
+                joinedSet: new Set(),
+                declinedSet: new Set(),
             };
             calls.set(conversationId, call);
             userCalls.set(userId, conversationId);
+
+            
+            // Create the history entry. If this fails the call still works,
+            // it just won't appear in the call history.
+            try {
+                const log = await Call.create({
+                    conversation: conversationId,
+                    caller: userId,
+                    type,
+                    isGroup,
+                    invited: invitees,
+                });
+                call.logId = log._id;
+            } catch (logError) {
+                console.error("Could not create the call log", logError);
+            }
+
 
             call.timer = setTimeout(() => {
                 if (call.participants.size <= 1) endCall(io, call, "no-answer");
@@ -118,6 +180,11 @@ export default function registerCallHandlers(io, socket) {
         userCalls.set(userId, conversationId);
         clearTimeout(call.timer);
 
+        
+        call.joinedSet.add(userId);
+        if (!call.answeredAt) call.answeredAt = new Date();
+
+
         existing.forEach((uid) =>
             io.to(call.participants.get(uid)).emit("call:user-joined", { conversationId, userId })
         );
@@ -133,6 +200,10 @@ export default function registerCallHandlers(io, socket) {
     socket.on("call:reject", ({ conversationId }) => {
         const call = calls.get(conversationId);
         if (!call || call.participants.has(userId) || !call.members.has(userId)) return;
+                if (!call || call.participants.has(userId) || !call.members.has(userId)) return;
+
+        call.declinedSet.add(userId);
+
         if (!call.isGroup) endCall(io, call, "rejected");
     });
 

@@ -30,7 +30,8 @@ export default function Sidebar({
   onBackFromNewGroup,
   onCreateGroup,
   onLogout,
-  filters = DEFAULT_FILTERS,
+    filters = DEFAULT_FILTERS,
+  filterCounts = {},
 }) {
   const [internalSearch, setInternalSearch] = useState("");
   const activeSearch = searchQuery !== undefined ? searchQuery : internalSearch;
@@ -99,8 +100,11 @@ export default function Sidebar({
         onLogout={onLogout}
       />
       <SearchBar value={activeSearch} onChange={handleSearchChange} />
-      <ChatFilters activeFilter={activeFilter} onChange={setActiveFilter} filters={filters} />
-
+            <ChatFilters
+        activeFilter={activeFilter}
+        onChange={setActiveFilter}
+        filters={filters.map((filter) => ({ ...filter, count: filterCounts[filter.value] || undefined }))}
+      />
       {/* Archived + chats scroll together, like WhatsApp Web */}
       <div className="whatsapp-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
         <ArchivedRow />

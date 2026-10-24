@@ -7,7 +7,8 @@ import MessageList from "./MessageList";
 import MessageComposer from "./MessageComposer";
 import ChatModals from "./ChatModals";
 import GroupInfoPanel from "./GroupInfoPanel";
-
+import {   ArrowDown } from "lucide-react";
+import ChatSearchPanel from "./ChatSearchPanel";
 import { useChatMessages } from "./useChatMessages";
 import { useMessageActions } from "./useMessageActions";
 import api from "../../../lib/api";
@@ -48,9 +49,13 @@ export default function ChatWindow({
   const [isDeleting, setIsDeleting] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [mediaSlides, setMediaSlides] = useState([]);
-    // Which chat has its group info panel open (switching chats closes it).
+   // Side panels: group info or message search (switching chats closes them).
   const [infoChatId, setInfoChatId] = useState(null);
+  const [search, setSearch] = useState({ chatId: null, query: "" });
+  const [jumpTarget, setJumpTarget] = useState(null);
   const infoOpen = infoChatId === chatId;
+  const searchOpen = search.chatId === chatId;
+  const searchQuery = searchOpen ? search.query : "";
 
   // Sidebar sync callback
   const notifySidebar = useCallback(
@@ -66,7 +71,7 @@ export default function ChatWindow({
   );
 
   // Hook 1: Messages Data & Sync
-  const { messages, setMessages, isLoading, error, reload, updateMessage } = useChatMessages({
+      const { messages, setMessages, isLoading, error, reload, updateMessage, isHistory, loadAround, hasMore, isLoadingOlder, olderFailed, loadOlder } = useChatMessages({
     chatId,
     currentUserId,
     onConversationRead,
@@ -106,7 +111,37 @@ export default function ChatWindow({
   if (!chat) return <EmptyChat />;
 
   // Handlers
+    const openInfo = () => {
+    setSearch({ chatId: null, query: "" });
+    setInfoChatId(chatId);
+  };
+
+  const openSearch = () => {
+    setInfoChatId(null);
+    setSearch((previous) => ({ chatId, query: previous.chatId === chatId ? previous.query : "" }));
+  };
+
+  const closeSearch = () => setSearch({ chatId: null, query: "" });
+
+  // A search result was clicked: open the part of the history it belongs to
+  // (if it isn't loaded yet), then scroll to it.
+  const handleSelectResult = async (messageId) => {
+    if (!messages.some((m) => m.id === messageId)) {
+      const opened = await loadAround(messageId);
+
+      if (!opened) {
+        showNotice("Unable to open that message");
+        return;
+      }
+    }
+
+    setJumpTarget({ id: messageId, n: Date.now() });
+  };
+
   const handleSendMessage = async (text, files, kind) => {
+    // Sending while looking at an old search result: go back to the latest messages first.
+    if (isHistory) await reload();
+
     await sendMessage(text, files, kind, replyingTo?.id);
     setReplyingTo(null);
   };
@@ -158,7 +193,9 @@ export default function ChatWindow({
         chat={chat}
         onBack={onBack}
         onStartCall={onStartCall}
-        onOpenInfo={chat.type === "group" ? () => setInfoChatId(chatId) : undefined}
+                onOpenInfo={chat.type === "group" ? openInfo : undefined}
+        onOpenSearch={openSearch}
+        searchActive={searchOpen}
       />
 
       {/* Message List Area */}
@@ -184,13 +221,31 @@ export default function ChatWindow({
           <MessageList
             messages={messages}
             currentUserId={currentUserId}
-                        isGroup={chat.type === "group"}
+           isGroup={chat.type === "group"}
+            isHistory={isHistory}
+            jumpTarget={jumpTarget}
+            highlight={searchQuery}
+                        hasMore={hasMore}
+            isLoadingOlder={isLoadingOlder}
+            olderFailed={olderFailed}
+            onLoadOlder={loadOlder}
             onOpenMenu={(msg, pos) => setMenu({ message: msg, ...pos })}
             onMediaClick={handleMediaClick}
             onAttachmentDelete={deleteSingleAttachment}
           />
         )}
       </div>
+
+              {isHistory && (
+        <button
+          type="button"
+          onClick={reload}
+          className="absolute bottom-[78px] right-6 z-30 flex items-center gap-2 rounded-full bg-[var(--wa-accent)] px-4 py-2 text-[13px] font-medium text-white shadow-lg"
+        >
+          <ArrowDown size={16} />
+          Jump to latest
+        </button>
+      )}
 
       {/* Message Input Composer */}
       <div className="relative z-20 w-full shrink-0">
@@ -257,6 +312,17 @@ export default function ChatWindow({
               onCloseLightbox={() => setLightboxIndex(-1)}
       />
     </section>
+
+    {searchOpen && (
+      <ChatSearchPanel
+        chat={chat}
+        currentUserId={currentUserId}
+        query={searchQuery}
+        onQueryChange={(query) => setSearch({ chatId, query })}
+        onClose={closeSearch}
+        onSelect={handleSelectResult}
+      />
+    )}
 
     {infoOpen && chat.type === "group" && (
       <GroupInfoPanel

@@ -3,6 +3,8 @@ import { Check, CheckCheck, ChevronDown, Forward, Star, Download, FileText, Tras
 import api from "../../../lib/api";
 import QuotedMessage from "./QuotedMessage";
 import VoiceNotePlayer from "./VoiceNotePlayer";
+// import
+import HighlightedText from "./HighlightedText";
 
 
 // A stable colour per sender so each person is easy to tell apart in a group.
@@ -31,6 +33,7 @@ export default function MessageBubble({
   message,
   showTail = true,
   showSender = false,
+  highlight = "",
   onJumpToMessage,
   onOpenMenu,
   onMediaClick,
@@ -309,7 +312,7 @@ export default function MessageBubble({
       {/* Text & Meta */}
       {message.text ? (
         <p className="whitespace-pre-wrap break-words px-1 pt-1 text-[14.2px] leading-[19px] text-[color:var(--wa-bubble-text)]">
-          {message.text}
+                   <HighlightedText text={message.text} query={highlight} />
           <span className={`${metaClass} float-right -mb-[2px] ml-[10px] mt-[4px]`}>{meta}</span>
         </p>
       ) : (

@@ -7,7 +7,7 @@ import {
 } from "react-router-dom";
 
 import { AuthProvider } from "./context/AuthContext";
-
+import { NavCountsProvider } from "./context/NavCountsContext";
 import AppLayout from "./components/AppLayout";
 import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
@@ -19,7 +19,8 @@ import GuestRoute from "./components/auth/GuestRoute";
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
+        <AuthProvider>
+        <NavCountsProvider>
         <div className="h-dvh min-h-0 w-full overflow-hidden">
           <Routes>
             {/* Routes for users who are not logged in */}
@@ -30,7 +31,7 @@ export default function App() {
 
             {/* Routes that require authentication */}
             <Route element={<ProtectedRoute />}>
-              <Route path="/app" element={<AppLayout />} />
+              <Route path="/app/*" element={<AppLayout />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
 
@@ -45,6 +46,7 @@ export default function App() {
             />
           </Routes>
         </div>
+        </NavCountsProvider>
       </AuthProvider>
     </BrowserRouter>
   );

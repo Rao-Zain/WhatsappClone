@@ -15,6 +15,7 @@ export default function MessageRow({
   highlighted,
   grouped = false,
   showSender = false,
+  highlight = "",
   className = "",
   onOpenMenu,
   onJumpToMessage,
@@ -88,7 +89,8 @@ export default function MessageRow({
             <MessageBubble
               message={message}
               showTail={!grouped}
-                            showSender={showSender}
+              showSender={showSender}
+               highlight={highlight}
               onJumpToMessage={onJumpToMessage}
               onOpenMenu={onOpenMenu}
               onMediaClick={onMediaClick}
