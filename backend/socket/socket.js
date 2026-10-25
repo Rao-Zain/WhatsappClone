@@ -10,6 +10,7 @@ import {
   resolveReplyTarget,
   serializeMessage,
 } from "../utils/serializeMessage.js";
+
 import { hasOnlineRecipient } from "../utils/messageDelivery.js";
 import { getBlockedMessage } from "../utils/blocks.js";
 // userId -> Set of socket IDs (a user can have several tabs/devices open)
@@ -394,6 +395,50 @@ export default function initializeSocket(io) {
         }
       } catch (error) {
         console.error("Read receipt notification error:", error);
+      }
+    });
+
+
+        // --------------------------------------------------
+    // TYPING INDICATOR
+    // Client sends { conversationId, isTyping }. Nothing is stored;
+    // it is only passed on to the other people in the chat.
+    // --------------------------------------------------
+
+    socket.on("typing", async (payload) => {
+      try {
+        const { conversationId, isTyping } = payload || {};
+
+        if (!mongoose.isValidObjectId(conversationId)) return;
+
+        const conversation = await Conversation.findOne({
+          _id: conversationId,
+          participants: userId,
+        }).select("_id type participants");
+
+        if (!conversation) return;
+
+        // A blocked person (or the blocker) never sees typing.
+        if (await getBlockedMessage(conversation, userId)) return;
+
+        // The name is looked up once per connection.
+        if (socket.data.typingName === undefined) {
+          const me = await User.findById(userId).select("name username").lean();
+          socket.data.typingName = me?.name?.trim() || me?.username || "";
+        }
+
+        for (const participantId of conversation.participants) {
+          if (String(participantId) === userId) continue;
+
+          io.to(`user:${String(participantId)}`).emit("typing:update", {
+            conversationId: String(conversation._id),
+            userId,
+            name: socket.data.typingName,
+            isTyping: Boolean(isTyping),
+          });
+        }
+      } catch (error) {
+        console.error("Typing indicator error:", error.message);
       }
     });
 

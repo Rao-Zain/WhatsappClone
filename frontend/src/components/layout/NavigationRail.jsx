@@ -50,7 +50,7 @@ function MetaAiIcon({ size = 22 }) {
 const NAV_ITEMS = [
   { to: "/app", label: "Chats", end: true, icon: ChatFilledIcon, countKey: "chats" },
   { to: "/app/calls", label: "Calls", icon: Phone, countKey: "calls" },
-  { to: "/status", label: "Status", icon: StatusIcon },
+    { to: "/app/status", label: "Status", icon: StatusIcon },
   { to: "/channels", label: "Channels", icon: MessageCircleMore },
   { to: "/communities", label: "Communities", icon: CommunitiesIcon, countKey: "groups" },
 ];

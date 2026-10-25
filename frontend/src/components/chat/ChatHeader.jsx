@@ -21,6 +21,7 @@ export default function ChatHeader({
   onStartCall,
   onBlock,
   onUnblock,
+    typingText,
 }) {
   // The menu remembers WHICH chat it was opened for, so switching chats closes it
   // without needing an effect.
@@ -48,7 +49,7 @@ export default function ChatHeader({
     "grid size-11 shrink-0 place-items-center rounded-full text-[color:var(--wa-chat-header-icon)] transition-colors hover:bg-[var(--wa-hover)] active:bg-[var(--wa-pressed)]";
 
   return (
-    <header className="relative z-30 flex h-[65px] w-full shrink-0 select-none items-center justify-between border-b border-[color:var(--wa-chat-header-border)] bg-[var(--wa-chat-header-bg)] pl-1 pr-2 sm:px-4">
+       <header className="relative z-30 flex h-[calc(56px+env(safe-area-inset-top))] w-full shrink-0 select-none items-center justify-between border-b border-[color:var(--wa-chat-header-border)] bg-[var(--wa-chat-header-bg)] pl-1 pr-2 pt-[env(safe-area-inset-top)] sm:h-[65px] sm:px-4 sm:pt-0">
       {/* Left: back (phone), avatar, name, presence */}
       <div className="flex min-w-0 flex-1 items-center">
         {onBack && (
@@ -85,7 +86,9 @@ export default function ChatHeader({
             </h2>
 
             <div className="truncate text-[13px] leading-[17px]">
-              {showPresence ? (
+                           {typingText ? (
+                <span className="text-[color:var(--wa-accent)]">{typingText}</span>
+              ) : showPresence ? (
                 <PresenceStatus
                   userId={chat.userId}
                   fallback={{ isOnline: chat.isOnline, lastSeen: chat.lastSeen }}
@@ -159,6 +162,22 @@ export default function ChatHeader({
                 role="menu"
                 className="wa-shadow-menu absolute right-0 top-11 z-40 w-[200px] overflow-hidden rounded-xl bg-[var(--wa-menu-bg)] py-2"
               >
+
+                                {/* Phone only: the search icon is hidden in the bar, so it lives here */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`${menuItem} sm:hidden`}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onOpenSearch?.();
+                  }}
+                >
+                  <Search size={18} className="text-[color:var(--wa-menu-icon)]" />
+                  Search
+                </button>
+
+
                 {isPrivate ? (
                   chat.blockedByMe ? (
                     <button
@@ -188,7 +207,7 @@ export default function ChatHeader({
                     </button>
                   )
                 ) : (
-                  <p className="px-5 py-2 text-[14px] text-[color:var(--wa-text-secondary)]">
+                                    <p className="hidden px-5 py-2 text-[14px] text-[color:var(--wa-text-secondary)] sm:block">
                     No options for groups yet.
                   </p>
                 )}

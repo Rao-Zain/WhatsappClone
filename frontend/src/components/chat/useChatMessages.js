@@ -47,6 +47,7 @@ export function formatMessage(message, currentUserId) {
     createdAt: message.createdAt,
     status: message.status || (message.read ? "read" : message.delivered ? "delivered" : "sent"),
     forwarded: Boolean(message.forwarded),
+        isEdited: Boolean(message.editedAt),
     starred: Boolean(message.starred),
     deletedForEveryone: Boolean(message.deletedForEveryone),
     reactions: normalizeReactions(message.reactions),
@@ -283,6 +284,16 @@ export function useChatMessages({
       setMessages((prev) => applyDeletedForEveryone(prev, String(payload.messageId)));
     }
 
+    
+    function handleEdited(payload) {
+      if (String(payload.conversationId) !== conversationId) return;
+      updateMessage(String(payload.messageId), (m) => ({
+        ...m,
+        text: payload.text,
+        isEdited: true,
+      }));
+    }
+
     // Double Gray Tick Listener
     function handleDelivered(payload) {
       if (String(payload.conversationId) !== conversationId) return;
@@ -327,6 +338,7 @@ export function useChatMessages({
     socket.on("message:new", handleNewMessage);
     socket.on("message:reaction", handleReaction);
     socket.on("message:deleted", handleDeleted);
+        socket.on("message:edited", handleEdited);
     socket.on("messages:delivered", handleDelivered);
     socket.on("messages:read", handleRead);
 

@@ -4,7 +4,7 @@ export default function SearchBar({ value, onChange }) {
   return (
     <div className="shrink-0 px-4 pt-0.5 sm:px-5">
       <label
-        className="flex h-[38px] w-full items-center gap-3.5 rounded-full border border-transparent bg-[var(--wa-search-bg)] pl-[18px] pr-4 transition-colors focus-within:border-[color:var(--wa-search-border-focus)] focus-within:bg-[var(--wa-search-bg-focus)]"
+        className="flex h-11 w-full items-center gap-3.5 sm:h-[38px] rounded-full border border-transparent bg-[var(--wa-search-bg)] pl-[18px] pr-4 transition-colors focus-within:border-[color:var(--wa-search-border-focus)] focus-within:bg-[var(--wa-search-bg-focus)]"
       >
         <Search size={18} strokeWidth={2.4} className="shrink-0 text-[color:var(--wa-search-icon)]" />
         <input

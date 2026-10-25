@@ -16,6 +16,7 @@ export default function ChatModals({
   onReact,
   onReply,
   onCopy,
+    onEdit,
   onDownload,
   onForwardOpen,
   onStar,
@@ -50,6 +51,7 @@ export default function ChatModals({
           onReact={(emoji) => onReact(menuMessage, emoji)}
           onReply={() => onReply(menuMessage)}
           onCopy={() => onCopy(menuMessage.text)}
+                    onEdit={() => onEdit(menuMessage)}
           onDownload={() => onDownload(menuMessage.attachments)}
           onForward={() => onForwardOpen(menuMessage)}
           onStar={() => onStar(menuMessage)}

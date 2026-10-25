@@ -14,6 +14,8 @@ import { avatarDirectory } from "./utils/avatarStorage.js";
 import callRoutes from "./routes/callRoutes.js";   // with the other route imports
 import chatRequestRoutes from "./routes/chatRequestRoutes.js";
 import blockRoutes from "./routes/blockRoutes.js";
+import statusRoutes from "./routes/statusRoutes.js";
+import { cleanupExpiredStatuses } from "./controllers/statusController.js";
 
 dotenv.config();
 
@@ -44,6 +46,7 @@ app.use("/api/conversations", conversationRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/chat-requests", chatRequestRoutes);
 app.use("/api/blocks", blockRoutes);
+app.use("/api/statuses", statusRoutes);
 app.use("/api/calls", callRoutes);                  // under app.use("/api/messages", messageRoutes);
 
 // Socket.IO
@@ -117,6 +120,12 @@ async function startServer() {
     httpServer.listen(PORT, () => {
       console.log(`Server running at http://localhost:${PORT}`);
     });
+
+    
+    // Status updates last 24 hours: remove expired ones (and their files) now and every 15 minutes.
+    cleanupExpiredStatuses();
+    setInterval(cleanupExpiredStatuses, 15 * 60 * 1000);
+    
   } catch (error) {
     console.error("Failed to start server:", error.message);
     process.exit(1);

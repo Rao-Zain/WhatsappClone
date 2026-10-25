@@ -25,7 +25,7 @@ import {
 
 import upload from "../middleware/uploadMiddleware.js";
 import {
-  reactToMessage, toggleStarMessage, deleteMessage, forwardMessage,
+   reactToMessage, toggleStarMessage, deleteMessage, forwardMessage, editMessage,
 } from "../controllers/messageActionsController.js";
 
 import {
@@ -76,6 +76,7 @@ router.post("/:conversationId/messages", sendMessage);
 router.put("/:conversationId/messages/:messageId/reaction", reactToMessage);
 router.post("/:conversationId/messages/:messageId/star", toggleStarMessage);
 router.post("/:conversationId/messages/:messageId/forward", forwardMessage);
+router.patch("/:conversationId/messages/:messageId", editMessage);
 router.delete("/:conversationId/messages/:messageId", deleteMessage);
 
 export default router;

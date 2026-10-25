@@ -11,6 +11,7 @@ import {   ArrowDown } from "lucide-react";
 import ChatSearchPanel from "./ChatSearchPanel";
 import { useChatMessages } from "./useChatMessages";
 import { useMessageActions } from "./useMessageActions";
+import useTypingEmitter from "../../hooks/useTypingEmitter";
 import api from "../../../lib/api";
 import BlockDialog from "./BlockDialog";
 import BlockedBar from "./BlockedBar";
@@ -38,12 +39,14 @@ export default function ChatWindow({
     onGroupUpdated,
   onGroupLeft,
     onBlockChange,
+      typingText,
 }) {
   const currentUserId = getCurrentUserId();
   const chatId = chat?.id;
 
   // Active UI states
   const [replyingTo, setReplyingTo] = useState(null);
+    const [editingMessage, setEditingMessage] = useState(null);
   const [menu, setMenu] = useState(null);
   const [forwardingMessage, setForwardingMessage] = useState(null);
   const [isForwarding, setIsForwarding] = useState(false);
@@ -104,10 +107,14 @@ export default function ChatWindow({
     setMessages,
   });
 
+    // "typing…" going out to the other person
+  const { notifyTyping, stopTyping } = useTypingEmitter(chatId);
+
   // Reset modal state on conversation change
   useEffect(() => {
     setMenu(null);
     setReplyingTo(null);
+        setEditingMessage(null);
     setForwardingMessage(null);
     setDeletingMessage(null);
     setLightboxIndex(-1);
@@ -142,6 +149,30 @@ export default function ChatWindow({
     }
 
     setJumpTarget({ id: messageId, n: Date.now() });
+  };
+
+    // Edit: the message text goes back into the message box.
+  const handleEditOpen = (message) => {
+    setMenu(null);
+    setReplyingTo(null);
+    setEditingMessage(message);
+  };
+
+  const handleSaveEdit = async (text) => {
+    if (!editingMessage) return;
+
+    const response = await api.patch(
+      `/conversations/${chatId}/messages/${editingMessage.id}`,
+      { text }
+    );
+
+    updateMessage(editingMessage.id, (m) => ({
+      ...m,
+      text: response.data.text,
+      isEdited: Boolean(response.data.editedAt),
+    }));
+
+    setEditingMessage(null);
   };
 
   const handleSendMessage = async (text, files, kind) => {
@@ -232,6 +263,7 @@ export default function ChatWindow({
         onOpenSearch={openSearch}
         searchActive={searchOpen}
                 onBlock={() => setBlockDialogOpen(true)}
+                        typingText={typingText}
         onUnblock={handleUnblock}
       />
 
@@ -301,6 +333,11 @@ export default function ChatWindow({
             uploadProgress={uploadProgress}
             replyTo={replyingTo}
             onCancelReply={() => setReplyingTo(null)}
+                        editing={editingMessage}
+            onSaveEdit={handleSaveEdit}
+            onCancelEdit={() => setEditingMessage(null)}
+            onTyping={notifyTyping}
+            onStopTyping={stopTyping}
           />
         )}
       </div>
@@ -322,8 +359,10 @@ export default function ChatWindow({
         onReact={react}
         onReply={(msg) => {
           setMenu(null);
+                    setEditingMessage(null);
           setReplyingTo(msg);
         }}
+                onEdit={handleEditOpen}
         onCopy={copy}
         onDownload={download}
         onForwardOpen={(msg) => {

@@ -113,6 +113,9 @@ export default function MessageBubble({
       {message.starred && (
         <Star size={11} className="fill-[var(--wa-bubble-meta)] text-[color:var(--wa-bubble-meta)]" />
       )}
+
+            {message.isEdited && <span>Edited</span>}
+            
       <span>{message.time || formatMessageTime(message.createdAt)}</span>
       {isMe && (
         <span

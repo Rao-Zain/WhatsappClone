@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../lib/api";
 import { getSocket } from "../../lib/socket";
 import NavigationRail from "./layout/NavigationRail";
@@ -12,10 +12,14 @@ import { PresenceProvider } from "../context/PresenceContext";
 import useCall from "../hooks/useCall";
 import CallOverlay from "../components/call/CallOverlay";
 import useAppSounds from "../hooks/useAppSounds";
-import { useLocation, useNavigate } from "react-router-dom";
+import { matchPath, useLocation, useNavigate } from "react-router-dom";
+import useIsMobile, { isMobileNow } from "../hooks/useIsMobile";
 import CallsSidebar from "./calls/CallsSidebar";
 import CallsMain from "./calls/CallsMain";
 import { useCallHistory } from "./calls/useCallHistory";
+import useStatuses from "./status/useStatuses";
+import StatusSidebar from "./status/StatusSidebar";
+import StatusMain from "./status/StatusMain";
 import {
   requestNotificationPermission, showNotification, isAppActive } from "../../lib/notifications";
 
@@ -192,7 +196,86 @@ export default function AppLayout() {
     const { refreshNavCounts } = useNavCounts();
   const location = useLocation();
   const navigate = useNavigate();
-  const view = location.pathname.startsWith("/app/calls") ? "calls" : "chats";
+    const view = location.pathname.startsWith("/app/calls")
+    ? "calls"
+    : location.pathname.startsWith("/app/status")
+      ? "status"
+      : "chats";
+  
+  // Phone: one screen at a time. The open chat lives in the address (/app/chat/<id>),
+  // so the phone's Back button / swipe-back returns to the chat list.
+  const isMobile = useIsMobile();
+  const chatRouteId =
+    matchPath("/app/chat/:chatId", location.pathname)?.params.chatId || null;
+  const showChatOnMobile = isMobile && view === "chats" && Boolean(chatRouteId);
+
+  // Which chat is really open right now (phone: from the address, computer: from the click).
+  const openChatId = isMobile
+    ? view === "chats"
+      ? chatRouteId
+      : null
+    : selectedChatId;
+
+    
+  // Status updates (stories). Created here so they stay loaded while you switch tabs.
+  const statuses = useStatuses();
+
+  // ----- Typing indicators -----
+  // typingByChat: { [conversationId]: { [userId]: name } }
+  // An entry disappears when the person stops, or after 6 seconds without a refresh.
+  const [typingByChat, setTypingByChat] = useState({});
+  const typingTimers = useRef({});
+
+  useEffect(() => {
+    const socket = getSocket();
+    const timers = typingTimers.current;
+
+    function handleTyping({ conversationId, userId, name, isTyping }) {
+      const chatKey = String(conversationId);
+      const userKey = String(userId);
+      const timerKey = `${chatKey}:${userKey}`;
+
+      clearTimeout(timers[timerKey]);
+
+      const remove = () => {
+        delete timers[timerKey];
+
+        setTypingByChat((previous) => {
+          if (!previous[chatKey]?.[userKey]) return previous;
+
+          const people = { ...previous[chatKey] };
+          delete people[userKey];
+
+          const next = { ...previous };
+
+          if (Object.keys(people).length) next[chatKey] = people;
+          else delete next[chatKey];
+
+          return next;
+        });
+      };
+
+      if (!isTyping) {
+        remove();
+        return;
+      }
+
+      setTypingByChat((previous) => ({
+        ...previous,
+        [chatKey]: { ...previous[chatKey], [userKey]: name || "Someone" },
+      }));
+
+      timers[timerKey] = setTimeout(remove, 6000);
+    }
+
+    socket.on("typing:update", handleTyping);
+
+    return () => {
+      socket.off("typing:update", handleTyping);
+      Object.values(timers).forEach(clearTimeout);
+    };
+  }, []);
+
   const callHistory = useCallHistory({ enabled: view === "calls" });
   const [selectedCallId, setSelectedCallId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -370,7 +453,7 @@ const getUserAvatar = (userId) =>
         senderId === String(currentUserId);
 
       const isSelectedConversation =
-        view === "chats" && String(selectedChatId) === conversationId;
+               view === "chats" && String(openChatId) === conversationId;
 
       if (!isOwnMessage && message.type !== "system") {
         const active = isAppActive();
@@ -497,6 +580,23 @@ const getUserAvatar = (userId) =>
       }
     }
 
+        // The sender edited a message: refresh the preview if it is the last one in the chat.
+    function handleEdited({ conversationId, text, isLastMessage }) {
+      if (!isLastMessage) return;
+
+      setChats((previousChats) =>
+        previousChats.map((chat) =>
+          chat.id === String(conversationId)
+            ? {
+                ...chat,
+                message: text,
+                lastMessage: chat.lastMessage ? { ...chat.lastMessage, text } : chat.lastMessage,
+              }
+            : chat
+        )
+      );
+    }
+
     function handleDeleted({ conversationId, isLastMessage }) {
       if (!isLastMessage) return;
 
@@ -511,6 +611,7 @@ const getUserAvatar = (userId) =>
 
     socket.on("message:new", handleNewMessage);
     socket.on("message:deleted", handleDeleted);
+        socket.on("message:edited", handleEdited);
 
     if (!socket.connected) {
       socket.connect();
@@ -519,8 +620,9 @@ const getUserAvatar = (userId) =>
     return () => {
       socket.off("message:new", handleNewMessage);
       socket.off("message:deleted", handleDeleted);
+            socket.off("message:edited", handleEdited);
     };
-  }, [selectedChatId, view, playMessage]);
+   }, [openChatId, view, playMessage]);
 
 
     // Live profile updates (name, username, about, photo) from other users,
@@ -640,6 +742,8 @@ const getUserAvatar = (userId) =>
 
     setSelectedChatId(id);
 
+    // Phone: opening a chat is a new screen, so Back returns to the list.
+    if (isMobileNow()) navigate(`/app/chat/${id}`);
     setChats((previousChats) =>
       previousChats.map((chat) =>
         chat.id === id
@@ -714,10 +818,25 @@ const getUserAvatar = (userId) =>
   }, [view, callCount, refreshNavCounts]);
 
   // "Message" button on a call: go to that chat.
-  function handleMessageFromCall(chatId) {
+   function handleMessageFromCall(chatId) {
     handleSelectChat(chatId);
-    navigate("/app");
+    if (!isMobileNow()) navigate("/app");
   }
+
+  // Phone: back arrow in the chat header.
+  function handleBack() {
+    if (window.history.state?.idx > 0) navigate(-1);
+    else navigate("/app", { replace: true });
+  }
+
+  // Phone: the chat in the address is gone (deleted, left the group): back to the list.
+  useEffect(() => {
+    if (!isMobile || !chatRouteId || isLoading) return;
+
+    if (!chats.some((chat) => chat.id === chatRouteId)) {
+      navigate("/app", { replace: true });
+    }
+  }, [isMobile, chatRouteId, chats, isLoading, navigate]);
 
   const selectedCall =
     callHistory.calls.find((item) => item.id === selectedCallId) || null;
@@ -764,7 +883,7 @@ const getUserAvatar = (userId) =>
   }
 
   const selectedChat =
-    chats.find((chat) => chat.id === selectedChatId) || null;
+        chats.find((chat) => chat.id === openChatId) || null;
 
   const filteredChats = chats.filter((chat) => {
     const query = searchQuery.trim().toLowerCase();
@@ -777,6 +896,29 @@ const getUserAvatar = (userId) =>
       (chat.message || "").toLowerCase().includes(query)
     );
   });
+
+    // "typing…" text per chat (a group shows who is typing).
+  const typingTexts = {};
+
+  for (const [chatId, people] of Object.entries(typingByChat)) {
+    const names = Object.values(people);
+
+    if (names.length === 0) continue;
+
+    const isGroup = chats.find((chat) => chat.id === chatId)?.type === "group";
+
+    typingTexts[chatId] = !isGroup
+      ? "typing…"
+      : names.length === 1
+        ? `${names[0]} is typing…`
+        : names.length === 2
+          ? `${names[0]} and ${names[1]} are typing…`
+          : `${names.length} people are typing…`;
+  }
+
+  const chatsWithTyping = filteredChats.map((chat) =>
+    typingTexts[chat.id] ? { ...chat, typingText: typingTexts[chat.id] } : chat
+  );
 
   const handleMessageSent = (conversationId, latestMessage) => {
     setChats((prevChats) =>
@@ -839,7 +981,12 @@ const getUserAvatar = (userId) =>
           }}
         />
 
-        <div className="relative flex w-[410px] min-w-[340px] shrink-0 flex-col max-[700px]:w-[calc(100%-65px)] max-[700px]:min-w-0">
+               {/* Phone: full-width list, hidden while a chat is open. */}
+        <div
+          className={`relative flex shrink-0 flex-col max-sm:w-full max-sm:min-w-0 sm:w-[410px] sm:min-w-[340px] ${
+            showChatOnMobile ? "max-sm:hidden" : ""
+          }`}
+        >
           {view === "calls" ? (
             <CallsSidebar
               history={callHistory}
@@ -848,10 +995,12 @@ const getUserAvatar = (userId) =>
               onCall={call.startCall}
               canCall={call.callState === "idle"}
             />
+          ) : view === "status" ? (
+            <StatusSidebar statuses={statuses} />
           ) : (
           <Sidebar
-            chats={filteredChats}
-            selectedChatId={selectedChatId}
+                        chats={chatsWithTyping}
+                        selectedChatId={isMobile ? null : selectedChatId}
             onSelectChat={handleSelectChat}
              isNewGroup={isNewGroup}
              filterCounts={filterCounts}
@@ -915,7 +1064,8 @@ const getUserAvatar = (userId) =>
           )}
         </div>
 
-        <main className="min-w-0 flex-1 max-[700px]:hidden">
+               {/* Phone: only visible while a chat is open. */}
+        <main className={`min-w-0 flex-1 ${showChatOnMobile ? "" : "max-sm:hidden"}`}>
         {view === "calls" ? (
             <CallsMain
               call={selectedCall}
@@ -924,18 +1074,21 @@ const getUserAvatar = (userId) =>
               onMessage={handleMessageFromCall}
               canCall={call.callState === "idle"}
             />
+                      ) : view === "status" ? (
+            <StatusMain />
           ) : (
           <ChatWindow
             chat={selectedChat}
             chats={chats}
             onConversationRead={handleConversationRead}
-            // onBack={handleBack}
+            onBack={handleBack}
             onMessageSent={handleMessageSent} // <-- Add this prop here
             onMessageStatusChange={handleMessageStatusChange}
             onStartCall={call.startCall}
                         onGroupUpdated={applyConversationUpdate}
             onGroupLeft={handleGroupLeft}
                         onBlockChange={applyBlockChange}
+                                    typingText={selectedChat ? typingTexts[selectedChat.id] : undefined}
           />
            )}
 

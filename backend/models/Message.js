@@ -140,6 +140,13 @@ const messageSchema = new mongoose.Schema(
       default: false,
     },
 
+    
+    // Set when the sender edits the text. null = never edited.
+    editedAt: {
+      type: Date,
+      default: null,
+    },
+
     reactions: {
       type: [
         {

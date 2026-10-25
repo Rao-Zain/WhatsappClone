@@ -47,3 +47,22 @@ button {
 .whatsapp-scrollbar::-webkit-scrollbar-button {
   display: none;
 }
+
+/* ---------- Phone behaviour ---------- */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  -webkit-tap-highlight-color: transparent; /* no grey flash when tapping */
+  overscroll-behavior: none;                /* no pull-to-refresh / bounce on the whole app */
+}
+
+@media (max-width: 639px) {
+  /* iPhones zoom the page when a field is smaller than 16px */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}

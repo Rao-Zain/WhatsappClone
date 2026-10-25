@@ -121,6 +121,14 @@ export default function ChatItem({ chat, active, onClick }) {
 
           <div className="flex min-w-0 items-center justify-between gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
+
+              {chat.typingText ? (
+                <span className="truncate text-[14px] leading-5 text-[color:var(--wa-accent)]">
+                  {chat.typingText}
+                </span>
+              ) : (
+                <>
+
               {/* Status Ticks in Sidebar */}
               {isMe && (
                 status === "read" ? (
@@ -139,6 +147,10 @@ export default function ChatItem({ chat, active, onClick }) {
               <span className="truncate text-[14px] leading-5 text-[color:var(--wa-text-secondary)]">
                 {preview.text}
               </span>
+
+                </>
+              )}
+
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5">
