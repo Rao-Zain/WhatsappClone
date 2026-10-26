@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Ban, Camera, KeyRound, LogOut, MoreVertical, Palette, Star, UserPlus, Users } from "lucide-react";
+import { Ban, Camera, KeyRound, LogOut, MoreVertical, Palette, Star, UserPlus, Users, Settings } from "lucide-react";
 import MyPinModal from "../chatRequests/MyPinModal";
 import ThemeModal from "../../theme/ThemeModal";
 import { useAuth } from "../../context/AuthContext";
@@ -118,7 +118,7 @@ export default function SidebarHeader({
   };
 
   return (
-    <header className="flex h-[65px] shrink-0 select-none items-center justify-between px-4 sm:px-5">
+       <header className="flex h-[calc(56px+env(safe-area-inset-top))] shrink-0 select-none items-center justify-between px-4 pt-[env(safe-area-inset-top)] sm:h-[65px] sm:px-5 sm:pt-0">
       <h1 className="text-[24px] font-bold leading-none tracking-[-0.02em] text-[color:var(--wa-title)] sm:text-[22px]">
         WhatsApp
       </h1>
@@ -186,6 +186,17 @@ export default function SidebarHeader({
                 <button type="button" role="menuitem" className={menuItem} onClick={run(() => setThemeOpen(true))}>
                   <Palette size={18} className="text-[color:var(--wa-menu-icon)]" />
                   Change theme
+                </button>
+
+                                {/* Phone only: the side rail (with the Settings link) is hidden on phones */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`${menuItem} sm:hidden`}
+                  onClick={run(() => navigate("/settings"))}
+                >
+                  <Settings size={18} className="text-[color:var(--wa-menu-icon)]" />
+                  Settings
                 </button>
 
                 <div className="my-1 h-px bg-[var(--wa-menu-divider)]" />

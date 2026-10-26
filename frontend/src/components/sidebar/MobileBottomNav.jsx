@@ -6,7 +6,7 @@ import { useNavCounts } from "../../context/NavCountsContext";
 
 const ITEMS = [
   { to: "/app", label: "Chats", end: true, icon: ChatFilledIcon, key: "chats" },
-  { to: "/status", label: "Updates", icon: StatusIcon },
+  { to: "/app/status", label: "Updates", icon: StatusIcon },
   { to: "/communities", label: "Communities", icon: CommunitiesIcon, key: "groups" },
   { to: "/app/calls", label: "Calls", icon: Phone, key: "calls" },
 ];

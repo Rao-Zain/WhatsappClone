@@ -60,6 +60,7 @@ export function serializeMessage(message, viewerId = null) {
     status: m.status,
     createdAt: m.createdAt,
     forwarded: deleted ? false : Boolean(m.forwarded),
+        editedAt: deleted ? null : m.editedAt || null,
     deletedForEveryone: deleted,
     starred: viewerId
       ? (m.starredBy || []).some((u) => String(u) === String(viewerId))

@@ -15,6 +15,11 @@ const uploadDirectory = path.resolve("uploads/attachments");
 const DELETE_FOR_EVERYONE_WINDOW_MS = 48 * 60 * 60 * 1000;
 const MAX_FORWARD_TARGETS = 5;
 
+
+// Like WhatsApp: text messages can be edited for 15 minutes.
+// Keep in sync with EDIT_WINDOW_MS in MessageContextMenu.jsx.
+const EDIT_WINDOW_MS = 15 * 60 * 1000;
+
 function fail(res, status, message) {
   return res.status(status).json({ success: false, message });
 }
@@ -132,6 +137,84 @@ export async function reactToMessage(req, res) {
   } catch (error) {
     console.error("React to message error:", error);
     return fail(res, 500, "Unable to react to this message.");
+  }
+}
+
+// PATCH /api/conversations/:conversationId/messages/:messageId
+// Body: { text }. Only the sender can edit, only plain text messages, only for 15 minutes.
+export async function editMessage(req, res) {
+  try {
+    const ctx = await loadMessageContext(req, res);
+    if (!ctx) return;
+
+    const { conversation, message } = ctx;
+
+    if (String(message.sender) !== String(req.user._id)) {
+      return fail(res, 403, "You can only edit your own messages.");
+    }
+
+    if (message.deletedForEveryone) {
+      return fail(res, 400, "You can't edit a deleted message.");
+    }
+
+    if (message.type !== "text" || (message.attachments || []).length > 0) {
+      return fail(res, 400, "Only text messages can be edited.");
+    }
+
+    if (Date.now() - new Date(message.createdAt).getTime() > EDIT_WINDOW_MS) {
+      return fail(res, 403, "You can only edit a message within 15 minutes of sending it.");
+    }
+
+    const blockedMessage = await getBlockedMessage(conversation, req.user._id);
+
+    if (blockedMessage) {
+      return fail(res, 403, blockedMessage);
+    }
+
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+
+    if (!text) {
+      return fail(res, 400, "A message cannot be empty.");
+    }
+
+    if (text.length > 5000) {
+      return fail(res, 400, "A message cannot exceed 5000 characters.");
+    }
+
+    // Nothing changed: no "Edited" label, no broadcast.
+    if (text === message.text) {
+      return res.status(200).json({
+        success: true,
+        messageId: String(message._id),
+        text: message.text,
+        editedAt: message.editedAt,
+      });
+    }
+
+    const editedAt = new Date();
+
+    await Message.updateOne(
+      { _id: message._id },
+      { $set: { text, editedAt } }
+    );
+
+    emitToParticipants(req, conversation, "message:edited", {
+      conversationId: String(conversation._id),
+      messageId: String(message._id),
+      text,
+      editedAt,
+      isLastMessage: String(conversation.lastMessage) === String(message._id),
+    });
+
+    return res.status(200).json({
+      success: true,
+      messageId: String(message._id),
+      text,
+      editedAt,
+    });
+  } catch (error) {
+    console.error("Edit message error:", error);
+    return fail(res, 500, "Unable to edit this message.");
   }
 }
 

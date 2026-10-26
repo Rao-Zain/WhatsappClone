@@ -137,7 +137,7 @@ export default function Sidebar({
         filters={filters.map((filter) => ({ ...filter, count: filterCounts[filter.value] || undefined }))}
       />
       {/* Archived + chats scroll together, like WhatsApp Web */}
-      <div className="whatsapp-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
+           <div className="whatsapp-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain max-sm:pb-20">
                <RequestsRow count={chatRequests.incoming.length} onClick={() => setShowRequests(true)} />
         <ArchivedRow />
         <ChatList chats={filteredChats} selectedChatId={selectedChatId} onSelectChat={onSelectChat} />
@@ -148,7 +148,7 @@ export default function Sidebar({
         type="button"
         aria-label="New chat"
         onClick={onNewChat}
-        className="absolute bottom-[88px] right-4 z-10 grid size-14 place-items-center rounded-2xl bg-[var(--wa-fab-bg)] text-[color:var(--wa-fab-fg)] shadow-lg transition active:scale-95 sm:hidden"
+        className="absolute bottom-[calc(80px+env(safe-area-inset-bottom))] right-4 z-10 grid size-14 place-items-center rounded-2xl bg-[var(--wa-fab-bg)] text-[color:var(--wa-fab-fg)] shadow-lg transition active:scale-95 sm:hidden"
       >
         <NewChatIcon size={24} />
       </button>

@@ -19,6 +19,7 @@ import {
 import useTheme from "../../theme/useTheme"
 import EmojiPicker from "emoji-picker-react";
 import ReplyPreview from "./ReplyPreview";
+import EditPreview from "./EditPreview";
 import WaveSurfer from "wavesurfer.js";
 import RecordPlugin from "wavesurfer.js/dist/plugins/record.esm.js";
 
@@ -29,9 +30,26 @@ export default function MessageComposer({
   replyTo = null,
   onCancelReply,
   conversationId,
+    editing = null,
+  onSaveEdit,
+  onCancelEdit,
+  onTyping,
+  onStopTyping,
 }) {
   const [drafts, setDrafts] = useState({});
   const [text, setText] = useState("");
+  
+  // Editing a sent message: the box shows that message's text and the normal draft stays untouched.
+  const [editText, setEditText] = useState("");
+  const [editSeed, setEditSeed] = useState(null);
+  const isEditing = Boolean(editing);
+
+  if (editing && editSeed !== editing.id) {
+    setEditSeed(editing.id);
+    setEditText(editing.text);
+  } else if (!editing && editSeed !== null) {
+    setEditSeed(null);
+  }
   const previousConversationIdRef = useRef(conversationId);
   const [sendError, setSendError] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -76,6 +94,14 @@ const [previewUrls, setPreviewUrls] = useState([]);
       inputRef.current?.focus();
     }
   }, [replyTo?.id]);
+
+  
+  // Focus the box when an edit starts.
+  const editingId = editing?.id;
+
+  useEffect(() => {
+    if (editingId) inputRef.current?.focus();
+  }, [editingId]);
 
   // Save the current draft and restore the draft for the selected chat.
   const draftsRef = useRef({});
@@ -366,6 +392,28 @@ useEffect(() => {
       return;
     }
 
+        // Saving an edited message.
+    if (isEditing) {
+      const edited = editText.trim();
+
+      if (!edited) {
+        setSendError("A message can't be empty.");
+        return;
+      }
+
+      setSendError("");
+
+      try {
+        await onSaveEdit?.(edited);
+      } catch (error) {
+        setSendError(
+          error.response?.data?.message || error.message || "Failed to edit the message."
+        );
+      }
+
+      return;
+    }
+
     const trimmedText = text.trim();
 
     if (!trimmedText && selectedFiles.length === 0) {
@@ -374,6 +422,8 @@ useEffect(() => {
     }
 
     setSendError("");
+
+        onStopTyping?.();
 
     try {
       await onSendMessage(trimmedText, selectedFiles);
@@ -399,12 +449,14 @@ useEffect(() => {
     const input = inputRef.current;
     if (!input) return;
 
-    const start = input.selectionStart ?? text.length;
-    const end = input.selectionEnd ?? text.length;
+        const current = isEditing ? editText : text;
+    const start = input.selectionStart ?? current.length;
+    const end = input.selectionEnd ?? current.length;
 
-    const nextText = text.slice(0, start) + emojiData.emoji + text.slice(end);
+    const nextText = current.slice(0, start) + emojiData.emoji + current.slice(end);
 
-    setText(nextText);
+    if (isEditing) setEditText(nextText);
+    else setText(nextText);
     setShowEmojiPicker(false);
 
     requestAnimationFrame(() => {
@@ -474,6 +526,7 @@ useEffect(() => {
   const { isDark } = useTheme();
 
   const showSendButton =
+      isEditing ||
     isRecording ||
     isSendingVoice ||
     failedVoice ||
@@ -718,6 +771,10 @@ useEffect(() => {
       {/* Reply preview */}
       {replyTo && <ReplyPreview message={replyTo} onCancel={onCancelReply} />}
 
+      
+      {/* Edit banner */}
+      {editing && <EditPreview message={editing} onCancel={onCancelEdit} />}
+
       <form onSubmit={handleSubmit} className="flex w-full items-center gap-2">
         {/* Pill: 52px tall, fully rounded, 6px inner padding */}
         <div className="wa-shadow-float flex min-h-[52px] min-w-0 flex-1 items-center rounded-full bg-[var(--wa-composer-bg)] px-1.5 py-1">
@@ -790,9 +847,15 @@ useEffect(() => {
             <input
               ref={inputRef}
               type="text"
-              value={text}
+                            value={isEditing ? editText : text}
               onChange={(event) => {
                 const nextText = event.target.value;
+
+                if (isEditing) {
+                  setEditText(nextText);
+                  if (nextText.trim()) setSendError("");
+                  return;
+                }
 
                 textRef.current = nextText;
                 setText(nextText);
@@ -801,16 +864,22 @@ useEffect(() => {
                   draftsRef.current[conversationId] = nextText;
                 }
 
-                if (nextText.trim()) setSendError("");
+                if (nextText.trim()) {
+                  setSendError("");
+                  onTyping?.();
+                } else {
+                  onStopTyping?.();
+                }
               }}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   setShowEmojiPicker(false);
                   setShowAttachmentMenu(false);
                   onCancelReply?.();
+                  onCancelEdit?.();
                 }
               }}
-              placeholder="Type a message"
+              placeholder={isEditing ? "Edit message" : "Type a message"}
               aria-label="Type a message"
               autoComplete="off"
               className="h-10 min-w-0 flex-1 border-0 bg-transparent px-1.5 text-[15px] leading-5 text-[color:var(--wa-composer-text)] outline-none placeholder:text-[color:var(--wa-composer-placeholder)] focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none"

@@ -1,12 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import EmojiPicker from "emoji-picker-react";
-import { Reply, Copy, Download, Smile, Forward, Star, StarOff, Trash2 } from "lucide-react";
+import { Reply, Copy, Download, Smile, Forward, Pencil, Star, StarOff, Trash2 } from "lucide-react";
 import ReactionBar from "./ReactionBar";
 import ContextMenuItem from "./ContextMenuItem";
 import useTheme from "../../theme/useTheme";
 
 const MARGIN = 8;
+
+// Like WhatsApp: text messages can be edited for 15 minutes.
+// Keep in sync with EDIT_WINDOW_MS in messageActionsController.js.
+const EDIT_WINDOW_MS = 15 * 60 * 1000;
 
 /**
  * Right-click menu for a message.
@@ -20,6 +24,7 @@ export default function MessageContextMenu({
   onReact,
   onReply,
   onCopy,
+    onEdit,
   onDownload,
   onForward,
   onStar,
@@ -30,11 +35,19 @@ export default function MessageContextMenu({
   const [position, setPosition] = useState(null);
   const [visible, setVisible] = useState(false);
   const { isDark } = useTheme();
-
+  // Taken once when the menu opens (the menu is re-created for every click).
+  const [openedAt] = useState(() => Date.now());
   const { message, x, y, mode = "full" } = menu;
   const isDeleted = message.deletedForEveryone;
   const hasText = Boolean(message.text);
   const hasFiles = (message.attachments?.length || 0) > 0;
+  const canEdit =
+    Boolean(onEdit) &&
+    message.sender === "me" &&
+    message.type === "text" &&
+    !hasFiles &&
+    !isDeleted &&
+    openedAt - new Date(message.createdAt).getTime() < EDIT_WINDOW_MS;
 
   // Measure after render, then keep the menu fully inside the viewport.
   useLayoutEffect(() => {
@@ -150,6 +163,9 @@ export default function MessageContextMenu({
               {!isDeleted && <ContextMenuItem icon={Reply} label="Reply" onClick={onReply} />}
 
               {hasText && !isDeleted && <ContextMenuItem icon={Copy} label="Copy" onClick={onCopy} />}
+
+              
+              {canEdit && <ContextMenuItem icon={Pencil} label="Edit" onClick={onEdit} />}
 
               {hasFiles && !isDeleted && (
                 <ContextMenuItem icon={Download} label="Download" onClick={onDownload} />
