@@ -11,8 +11,8 @@ pnpm-debug.log*
 !.env.example
 
 node_modules
-dist
-dist-ssr
+
+
 .DS_Store
 .vscode/
 .idea/

@@ -1,0 +1,3 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><mask id="m"><rect width="512" height="512" fill="#fff"/>
+<g transform="translate(256 256) scale(1.25) translate(-256 -268)"><circle cx="206" cy="240" r="22" fill="#000"/><circle cx="256" cy="240" r="22" fill="#000"/><circle cx="306" cy="240" r="22" fill="#000"/></g></mask></defs>
+<g mask="url(#m)"><g transform="translate(256 256) scale(1.25) translate(-256 -268)"><path d="M192 148H320A56 56 0 0 1 376 204V276A56 56 0 0 1 320 332H244L184 388V332H192A56 56 0 0 1 136 276V204A56 56 0 0 1 192 148Z" fill="#fff"/></g></g></svg>
