@@ -4,9 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon server.js",
-     "vapid": "web-push generate-vapid-keys"
-  },
+  "start": "node server.js",
+  "dev": "nodemon server.js",
+  "vapid": "web-push generate-vapid-keys"
+},
   "keywords": [],
   "type": "module",
   "dependencies": {
