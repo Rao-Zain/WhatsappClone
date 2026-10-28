@@ -13,6 +13,8 @@ import {
 
 import { hasOnlineRecipient } from "../utils/messageDelivery.js";
 import { getBlockedMessage } from "../utils/blocks.js";
+import { notifyNewMessage } from "../utils/push.js";
+import { createSocketLimiter } from "../utils/socketRateLimit.js";
 // userId -> Set of socket IDs (a user can have several tabs/devices open)
 const onlineUsers = new Map();
 
@@ -235,7 +237,16 @@ export default function initializeSocket(io) {
         return next(new Error("Invalid authentication token"));
       }
 
+      // The account must still exist and the token must not be from before a password reset.
+      const account = await User.findById(userId).select("tokenVersion").lean();
+
+      if (!account || (decoded.tv ?? 0) !== (account.tokenVersion ?? 0)) {
+        return next(new Error("Authentication token is no longer valid"));
+      }
+
       socket.data.userId = userId;
+
+      
 
       next();
     } catch (error) {
@@ -248,6 +259,10 @@ export default function initializeSocket(io) {
     const userId = String(socket.data.userId);
 
     console.log(`User connected: ${userId}`);
+
+        // Flood protection for this connection.
+    const allowMessage = createSocketLimiter({ max: 30, windowMs: 10_000 });
+    const allowTyping = createSocketLimiter({ max: 20, windowMs: 10_000 });
 
     // Join this user's private room.
     socket.join(`user:${userId}`);
@@ -273,6 +288,14 @@ export default function initializeSocket(io) {
     socket.on("message:send", async (payload, acknowledge) => {
       const reply =
         typeof acknowledge === "function" ? acknowledge : () => {};
+
+        
+      if (!allowMessage()) {
+        return reply({
+          success: false,
+          message: "You are sending messages too fast. Please slow down.",
+        });
+      }
 
       try {
         const { conversationId, text, replyTo } = payload || {};
@@ -358,6 +381,9 @@ export default function initializeSocket(io) {
           );
         }
 
+        // Web Push for people who are not looking at the app (never blocks the reply).
+        void notifyNewMessage(io, conversation, messagePayload);
+
         reply({
           success: true,
           message: messagePayload,
@@ -371,6 +397,16 @@ export default function initializeSocket(io) {
         });
       }
     });
+
+        // The client reports whether the app is on screen and focused.
+    // While it is, we skip Web Push for this user (they see the message live).
+    socket.data.active = false;
+
+    socket.on("app:state", (payload) => {
+      socket.data.active = Boolean(payload?.active);
+    });
+
+
 
     socket.on("conversation:read:notify", async (payload) => {
       try {
@@ -406,6 +442,9 @@ export default function initializeSocket(io) {
     // --------------------------------------------------
 
     socket.on("typing", async (payload) => {
+
+            if (!allowTyping()) return;
+
       try {
         const { conversationId, isTyping } = payload || {};
 

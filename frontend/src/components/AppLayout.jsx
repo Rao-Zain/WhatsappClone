@@ -11,6 +11,8 @@ import { useCallback } from "react";
 import { PresenceProvider } from "../context/PresenceContext";
 import useCall from "../hooks/useCall";
 import CallOverlay from "../components/call/CallOverlay";
+import { showCallEndNotice } from "./call/callAlerts";
+import { toast } from "../../lib/swal";
 import useAppSounds from "../hooks/useAppSounds";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import useIsMobile, { isMobileNow } from "../hooks/useIsMobile";
@@ -20,9 +22,10 @@ import { useCallHistory } from "./calls/useCallHistory";
 import useStatuses from "./status/useStatuses";
 import StatusSidebar from "./status/StatusSidebar";
 import StatusMain from "./status/StatusMain";
-import {
-  requestNotificationPermission, showNotification, isAppActive } from "../../lib/notifications";
-
+import { showNotification, isAppActive } from "../../lib/notifications";
+import { isPushActive, syncPushSubscription } from "../../lib/push";
+import { maybeAskToEnableNotifications } from "../../lib/pushFlows";
+import useAppState from "../hooks/useAppState";
 
 function getCurrentUser() {
   try {
@@ -281,29 +284,41 @@ export default function AppLayout() {
   const [searchQuery, setSearchQuery] = useState("");
   const socket = getSocket();
   const call = useCall(socket);
+  useAppState(socket); // lets the server know when to send push notifications
     const [isNewGroup, setIsNewGroup] = useState(false);
 
 
   const { playRingtone, stopRingtone, playRingback, stopRingback, playMessage } =
     useAppSounds();
 
-  // Ask for notification permission on the first click (browsers require a gesture).
-  // use-sound / Howler unlocks audio on its own, so nothing is needed for sound.
+  // Tell the user when a call failed or was declined (it used to close silently).
   useEffect(() => {
-    function onFirstInteraction() {
-      requestNotificationPermission();
-      window.removeEventListener("pointerdown", onFirstInteraction);
-      window.removeEventListener("keydown", onFirstInteraction);
-    }
-    window.addEventListener("pointerdown", onFirstInteraction);
-    window.addEventListener("keydown", onFirstInteraction);
+    showCallEndNotice(call.endReason);
+  }, [call.endReason]);
+
+  // Connection changes: messages can't be sent while offline.
+  useEffect(() => {
+    const onOffline = () => toast("You're offline. Messages will send when you reconnect.", "warning");
+    const onOnline = () => toast("Back online");
+
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+
     return () => {
-      window.removeEventListener("pointerdown", onFirstInteraction);
-      window.removeEventListener("keydown", onFirstInteraction);
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
     };
   }, []);
 
+  // Push notifications: keep this device registered with the server, and (once)
+  // ask the user with a friendly dialog before the browser's own permission box.
+  // use-sound / Howler unlocks audio on its own, so nothing is needed for sound.
+  useEffect(() => {
+    syncPushSubscription();
 
+    const timer = setTimeout(maybeAskToEnableNotifications, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (call.callState === "incoming") {
@@ -463,14 +478,17 @@ const getUserAvatar = (userId) =>
           playMessage();
         }
 
-        // Desktop notification only when the app isn't in front
-        if (!active) {
+        // Desktop notification only when the app isn't in front.
+        // A hidden tab with push turned on is covered by the service worker
+        // (the server sends the push), so skip it here to avoid showing it twice.
+        if (!active && !(document.hidden && isPushActive())) {
           const senderName =
             message.sender?.name || message.sender?.username || "New message";
 
           showNotification(senderName, {
             body: message.text || "Sent an attachment",
             tag: `chat-${conversationId}`,
+            data: { conversationId, url: `/app/chat/${conversationId}` },
             onClick: () => handleSelectChat(conversationId),
           });
         }
@@ -816,6 +834,47 @@ const getUserAvatar = (userId) =>
       .then(refreshNavCounts)
       .catch(() => {});
   }, [view, callCount, refreshNavCounts]);
+
+  // Clicking a push notification: the service worker tells the open app which chat to show.
+  const openChatFromPush = useRef(null);
+
+  useEffect(() => {
+    openChatFromPush.current = (chatId) => {
+      handleSelectChat(chatId);
+      if (!isMobileNow()) navigate("/app");
+    };
+  });
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+
+    function onMessage(event) {
+      if (event.data?.type === "OPEN_CHAT" && event.data.conversationId) {
+        openChatFromPush.current?.(event.data.conversationId);
+      }
+    }
+
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, []);
+
+  // The app was closed and a notification started it at /app/chat/<id>.
+  // Phones show that route as is; on a computer, select the chat and tidy the address.
+  const routeChatHandled = useRef(null);
+
+  useEffect(() => {
+    if (isMobile || !chatRouteId || isLoading) return;
+    if (routeChatHandled.current === chatRouteId) return;
+
+    routeChatHandled.current = chatRouteId;
+
+    if (chats.some((chat) => chat.id === chatRouteId)) {
+      openChatFromPush.current?.(chatRouteId);
+    } else {
+      navigate("/app", { replace: true });
+    }
+  }, [isMobile, chatRouteId, isLoading, chats, navigate]);
+
 
   // "Message" button on a call: go to that chat.
    function handleMessageFromCall(chatId) {

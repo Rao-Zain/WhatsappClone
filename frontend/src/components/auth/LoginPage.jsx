@@ -23,7 +23,7 @@ export default function LoginPage() {
   const { setUser } = useAuth();
 
   const signupSuccess = location.state?.signupSuccess;
-
+    const passwordReset = location.state?.passwordReset;
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
@@ -132,7 +132,14 @@ export default function LoginPage() {
               Your account has been created successfully. Please log in.
             </div>
           )}
-
+            {passwordReset && (
+              <div
+                role="status"
+                className="mb-4 rounded-xl border border-[#b7e4c7] bg-[#d9fdd3] px-4 py-3 text-sm text-[#166534] shadow-xs"
+              >
+                Your password has been changed. Please log in with your new password.
+              </div>
+            )}
           <DownloadBanner />
 
           {/* Main Auth Card */}

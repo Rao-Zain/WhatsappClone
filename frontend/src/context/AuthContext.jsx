@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import api from "../../lib/api";
-
+import { forgetThisDevice } from "../../lib/push";
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -54,7 +54,11 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const logout = () => {
+ const logout = () => {
+    // Stop this device receiving push notifications for the account that is leaving.
+    // (Reads the token right now, so it must run before the session is cleared.)
+    forgetThisDevice();
+
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     sessionStorage.removeItem("token");

@@ -88,3 +88,70 @@ export async function sendOtpEmail(email, otp) {
     throw error;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Password reset emails                                               */
+/* ------------------------------------------------------------------ */
+
+function assertEmailSettings() {
+  const missing = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS", "EMAIL_FROM"].filter(
+    (key) => !process.env[key]?.trim()
+  );
+
+  if (missing.length) {
+    throw new Error(`Missing email settings: ${missing.join(", ")}`);
+  }
+}
+
+export async function sendPasswordResetEmail(email, otp) {
+  assertEmailSettings();
+
+  const minutes = Number(process.env.OTP_EXPIRY_MINUTES) || 10;
+
+  await getTransporter().sendMail({
+    from: process.env.EMAIL_FROM,
+    to: email,
+    subject: "Reset your WhatsApp Clone password",
+    text: [
+      `Your password reset code is: ${otp}`,
+      "",
+      `This code expires in ${minutes} minutes.`,
+      "",
+      "If you did not ask to reset your password, you can ignore this email.",
+      "Your password will not change unless the code is used.",
+    ].join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;color:#222">
+        <h2 style="color:#075e54">Reset your password</h2>
+        <p>Use this code to choose a new password:</p>
+        <div style="font-size:32px;font-weight:bold;letter-spacing:8px;padding:16px 0">
+          ${otp}
+        </div>
+        <p>This code expires in ${minutes} minutes.</p>
+        <p>If you did not ask to reset your password, you can ignore this email. Your password will not change unless the code is used.</p>
+      </div>
+    `,
+  });
+}
+
+export async function sendPasswordChangedEmail(email) {
+  assertEmailSettings();
+
+  await getTransporter().sendMail({
+    from: process.env.EMAIL_FROM,
+    to: email,
+    subject: "Your WhatsApp Clone password was changed",
+    text: [
+      "The password for your account was just changed, and you were signed out on all devices.",
+      "",
+      "If this was not you, reset your password again right away.",
+    ].join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;color:#222">
+        <h2 style="color:#075e54">Password changed</h2>
+        <p>The password for your account was just changed, and you were signed out on all devices.</p>
+        <p>If this was not you, reset your password again right away.</p>
+      </div>
+    `,
+  });
+}

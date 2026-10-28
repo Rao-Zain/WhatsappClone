@@ -1,11 +1,23 @@
 
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { createHash, randomInt } from "node:crypto";
+import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 
 import User from "../models/User.js";
 import PendingRegistration from "../models/PendingRegistration.js";
-import { sendOtpEmail } from "../utils/sendOtpEmail.js";
+import PasswordReset from "../models/PasswordReset.js";
+import {
+  sendOtpEmail,
+  sendPasswordResetEmail,
+  sendPasswordChangedEmail,
+} from "../utils/sendOtpEmail.js";
+import {
+  loginKeys,
+  getLockMinutes,
+  recordFailure,
+  clearFailures,
+  clearAccountLocks,
+} from "../utils/loginGuard.js";
 import { generatePin } from "../utils/chatPin.js";
 import { broadcastProfileUpdate } from "../socket/socket.js";
 import {
@@ -20,7 +32,8 @@ function createToken(user) {
   }
 
   return jwt.sign(
-    { userId: user._id.toString() },
+      // tv = token version: a password reset raises it and ends all older sessions.
+    { userId: user._id.toString(), tv: user.tokenVersion || 0 },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );
@@ -434,16 +447,26 @@ export async function resendOtp(req, res) {
   }
 }
 
+// Used when the account does not exist, so a wrong username takes as long as a wrong password.
+let dummyHash;
+
+function getDummyHash() {
+  dummyHash ??= bcrypt.hash("not-a-real-password", 12);
+  return dummyHash;
+}
+
 // POST /api/auth/login
 export async function login(req, res) {
   try {
-    const { username, password } = req.body;
+    const { username, password } = req.body || {};
 
     if (
       typeof username !== "string" ||
       !username.trim() ||
       typeof password !== "string" ||
-      !password
+      !password ||
+      username.length > 254 ||
+      password.length > 1000
     ) {
       return res.status(400).json({
         success: false,
@@ -452,6 +475,19 @@ export async function login(req, res) {
     }
 
     const identifier = username.trim();
+    const keys = loginKeys(identifier, req.ip);
+
+    // Too many wrong passwords: refuse before doing any work.
+    const lockedMinutes = await getLockMinutes(keys);
+
+    if (lockedMinutes > 0) {
+      return res.status(429).json({
+        success: false,
+        message: `Too many failed attempts. Try again in ${lockedMinutes} minute${
+          lockedMinutes === 1 ? "" : "s"
+        }.`,
+      });
+    }
 
     const user = await User.findOne({
       $or: [
@@ -460,13 +496,22 @@ export async function login(req, res) {
       ],
     }).select("+password");
 
-    if (!user) {
+    // Always run one password check, even for unknown names (same timing).
+    const isPasswordCorrect = await bcrypt.compare(
+      password,
+      user ? user.password : await getDummyHash()
+    );
+
+    if (!user || !isPasswordCorrect) {
+      await recordFailure(keys);
+
       return res.status(401).json({
         success: false,
         message: "Invalid username/email or password.",
       });
     }
 
+    // Only someone who knows the password learns the email is unverified.
     if (!user.emailVerified) {
       return res.status(403).json({
         success: false,
@@ -475,17 +520,7 @@ export async function login(req, res) {
       });
     }
 
-    const isPasswordCorrect = await bcrypt.compare(
-      password,
-      user.password
-    );
-
-    if (!isPasswordCorrect) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid username/email or password.",
-      });
-    }
+    await clearFailures(keys);
 
     const token = createToken(user);
 
@@ -501,6 +536,213 @@ export async function login(req, res) {
     return res.status(500).json({
       success: false,
       message: "Unable to log in.",
+    });
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Forgot password: 1) ask for a code by email  2) send code + new one */
+/* ------------------------------------------------------------------ */
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// POST /api/auth/forgot-password   { email }
+// Always answers the same way, so it can't be used to find out who has an account.
+export async function forgotPassword(req, res) {
+  try {
+    const { email } = req.body || {};
+
+    const normalizedEmail =
+      typeof email === "string" ? email.trim().toLowerCase() : "";
+
+    if (!EMAIL_PATTERN.test(normalizedEmail) || normalizedEmail.length > 254) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid email address.",
+      });
+    }
+
+    const user = await User.findOne({
+      email: normalizedEmail,
+      emailVerified: true,
+    }).select("_id email");
+
+    if (user) {
+      const cooldownSeconds = Math.max(
+        0,
+        Number(process.env.OTP_RESEND_COOLDOWN_SECONDS) || 60
+      );
+
+      const existing = await PasswordReset.findOne({ user: user._id }).select(
+        "lastSentAt"
+      );
+
+      const secondsSinceLast = existing
+        ? (Date.now() - existing.lastSentAt.getTime()) / 1000
+        : Infinity;
+
+      // Asking again too soon is silently ignored (the answer below stays the same).
+      if (secondsSinceLast >= cooldownSeconds) {
+        const otp = createOtp();
+
+        await PasswordReset.findOneAndUpdate(
+          { user: user._id },
+          {
+            $set: {
+              email: user.email,
+              otpHash: hashOtp(otp),
+              otpExpiresAt: getOtpExpiry(),
+              otpAttempts: 0,
+              lastSentAt: new Date(),
+              expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+            },
+          },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+
+        // Not awaited: otherwise the response time would show whether the account exists.
+        sendPasswordResetEmail(user.email, otp).catch((error) => {
+          console.error("Password reset email failed:", error.message);
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "If an account exists for that email, we sent a 6-digit reset code. Check your inbox and spam folder.",
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to start the password reset.",
+    });
+  }
+}
+
+// POST /api/auth/reset-password   { email, otp, newPassword }
+export async function resetPassword(req, res) {
+  try {
+    const { email, otp, newPassword } = req.body || {};
+
+    const normalizedEmail =
+      typeof email === "string" ? email.trim().toLowerCase() : "";
+
+    if (
+      !EMAIL_PATTERN.test(normalizedEmail) ||
+      typeof otp !== "string" ||
+      !/^\d{6}$/.test(otp)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter your email and the six-digit reset code.",
+      });
+    }
+
+    if (typeof newPassword !== "string" || newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must contain at least 8 characters.",
+      });
+    }
+
+    // bcrypt only uses the first 72 bytes, so longer passwords would be silently cut.
+    if (Buffer.byteLength(newPassword) > 72) {
+      return res.status(400).json({
+        success: false,
+        message: "Password cannot be longer than 72 characters.",
+      });
+    }
+
+    const invalidCode = {
+      success: false,
+      message: "That code is invalid or has expired. Request a new one.",
+    };
+
+    const user = await User.findOne({
+      email: normalizedEmail,
+      emailVerified: true,
+    }).select("_id email username");
+
+    const reset = user
+      ? await PasswordReset.findOne({ user: user._id }).select("+otpHash")
+      : null;
+
+    // Same answer for "no such account", "no request" and "expired".
+    if (
+      !user ||
+      !reset ||
+      reset.otpExpiresAt <= new Date() ||
+      reset.expiresAt <= new Date()
+    ) {
+      return res.status(400).json(invalidCode);
+    }
+
+    const maxAttempts = Math.max(1, Number(process.env.OTP_MAX_ATTEMPTS) || 5);
+
+    const tooManyAttempts = {
+      success: false,
+      message: "Too many incorrect attempts. Request a new code.",
+    };
+
+    if (reset.otpAttempts >= maxAttempts) {
+      await reset.deleteOne();
+      return res.status(429).json(tooManyAttempts);
+    }
+
+    const submitted = Buffer.from(hashOtp(otp));
+    const stored = Buffer.from(reset.otpHash);
+
+    const codeMatches =
+      submitted.length === stored.length && timingSafeEqual(submitted, stored);
+
+    if (!codeMatches) {
+      reset.otpAttempts += 1;
+
+      if (reset.otpAttempts >= maxAttempts) {
+        await reset.deleteOne();
+        return res.status(429).json(tooManyAttempts);
+      }
+
+      await reset.save();
+
+      return res.status(400).json({
+        success: false,
+        message: "The code is incorrect.",
+        attemptsRemaining: maxAttempts - reset.otpAttempts,
+      });
+    }
+
+    // Code is right: set the new password and end every existing session.
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    await User.updateOne(
+      { _id: user._id },
+      { $set: { password: hashedPassword }, $inc: { tokenVersion: 1 } }
+    );
+
+    await reset.deleteOne();
+    await clearAccountLocks(user);
+
+    // Disconnect any open sockets right now (they would fail on their next reconnect anyway).
+    req.app.get("io")?.in(`user:${user._id}`).disconnectSockets(true);
+
+    sendPasswordChangedEmail(user.email).catch((error) => {
+      console.error("Password changed email failed:", error.message);
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Your password has been reset. Please log in with your new password.",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to reset your password.",
     });
   }
 }

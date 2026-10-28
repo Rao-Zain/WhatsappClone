@@ -5,8 +5,9 @@ import {
   Bot,
   MessageSquareText,
   Bell,
-  Keyboard,
+    Keyboard,
   CircleHelp,
+  Download,
 } from "lucide-react";
 
 export const FONT =
@@ -31,5 +32,6 @@ export const SETTINGS_ITEMS = [
   { id: "chats", label: "Chats", description: "Theme, wallpaper, chat settings", icon: MessageSquareText },
   { id: "notifications", label: "Notifications", description: "Messages, groups, sounds", icon: Bell },
   { id: "shortcuts", label: "Keyboard shortcuts", description: "Quick actions", icon: Keyboard },
+   { id: "install", label: "Install app", description: "Add it to your home screen or desktop", icon: Download },
   { id: "help", label: "Help and feedback", description: "Help center, contact us, privacy policy", icon: CircleHelp },
 ];

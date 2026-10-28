@@ -4,6 +4,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import mongoose from "mongoose";
 import cors from "cors";
+import helmet from "helmet";
 import dotenv from "dotenv";
 import initializeSocket, { resetPresence } from "./socket/socket.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -15,14 +16,25 @@ import callRoutes from "./routes/callRoutes.js";   // with the other route impor
 import chatRequestRoutes from "./routes/chatRequestRoutes.js";
 import blockRoutes from "./routes/blockRoutes.js";
 import statusRoutes from "./routes/statusRoutes.js";
+import pushRoutes from "./routes/pushRoutes.js";
 import { cleanupExpiredStatuses } from "./controllers/statusController.js";
+import { apiLimiter } from "./middleware/rateLimiters.js";
+import { checkEnv } from "./utils/checkEnv.js";
 
 dotenv.config();
-
+checkEnv(); // stops here with a clear message if the settings are wrong
 const app = express();
 const httpServer = createServer(app);
 
 const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+
+// Behind a reverse proxy (Nginx, Render, Railway...) set TRUST_PROXY=1 in .env so
+// rate limits see each visitor's real IP. Leave it unset when there is no proxy.
+app.set("trust proxy", Number(process.env.TRUST_PROXY) || 0);
+
+// Safe default security headers. "cross-origin" lets the web app (another address)
+// show profile pictures served from /uploads/avatars.
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
 // Middleware
 app.use(
@@ -47,7 +59,9 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/chat-requests", chatRequestRoutes);
 app.use("/api/blocks", blockRoutes);
 app.use("/api/statuses", statusRoutes);
-app.use("/api/calls", callRoutes);                  // under app.use("/api/messages", messageRoutes);
+app.use("/api/push", pushRoutes);
+app.use("/api/calls", callRoutes);    
+app.use("/api", apiLimiter);              // under app.use("/api/messages", messageRoutes);
 
 // Socket.IO
 const io = new Server(httpServer, {

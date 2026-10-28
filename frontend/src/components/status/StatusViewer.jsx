@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Eye, Trash2, X } from "lucide-react";
 import api from "../../../lib/api";
+import { alertError, confirmAction, toast } from "../../../lib/swal";
 import StatusAvatar from "./StatusAvatar";
 import useStatusMedia from "./useStatusMedia";
 import { formatStatusTime } from "./statusUtils";
@@ -297,12 +298,25 @@ export default function StatusViewer({ groups, startGroup = 0, startIndex = 0, o
   }
 
   async function handleDelete() {
-    if (!status || !window.confirm("Delete this status update?")) return;
+     if (!status) return;
+
+    const confirmed = await confirmAction({
+      title: "Delete status update?",
+      text: "This status will be removed for everyone who can see it.",
+      confirmText: "Delete",
+      danger: true,
+    });
+
+    if (!confirmed) return;
 
     try {
       await onDelete?.(status.id);
-    } catch {
-      window.alert("Unable to delete this status. Please try again.");
+      toast("Status deleted");
+    } catch (error) {
+      alertError(error, {
+        title: "Couldn't delete status",
+        fallback: "Unable to delete this status. Please try again.",
+      });
     }
   }
 

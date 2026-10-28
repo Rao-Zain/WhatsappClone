@@ -1,0 +1,163 @@
+/* SweetAlert2, dressed with the app theme (works for every data-theme). */
+
+/* Above the status viewer (z-120), calls and every other overlay. */
+.swal2-container.wa-swal-container {
+  z-index: 10000;
+  padding: 16px;
+  font-family: var(--wa-font);
+}
+
+.swal2-container.wa-swal-container.swal2-backdrop-show,
+.swal2-container.wa-swal-container.swal2-noanimation {
+  background: var(--wa-overlay);
+}
+
+.swal2-popup.wa-swal-popup {
+  width: min(400px, 100%);
+  padding: 24px 24px 20px;
+  border-radius: 16px;
+  background: var(--wa-modal-bg);
+  color: var(--wa-text-primary);
+  box-shadow: 0 12px 40px var(--c-shadow, rgba(0, 0, 0, 0.3));
+  font-family: inherit;
+}
+
+.wa-swal-title.swal2-title {
+  padding: 8px 0 0;
+  color: var(--wa-text-primary);
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.wa-swal-text.swal2-html-container {
+  margin: 8px 0 0;
+  padding: 0;
+  color: var(--wa-text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.wa-swal-actions.swal2-actions {
+  width: 100%;
+  margin: 22px 0 0;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.wa-swal-btn.swal2-styled {
+  margin: 0;
+  padding: 9px 20px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: none;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.wa-swal-btn.swal2-styled:focus-visible {
+  outline: 2px solid var(--wa-accent);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.wa-swal-btn--confirm.swal2-styled {
+  background: var(--wa-accent);
+  color: var(--wa-accent-fg);
+}
+.wa-swal-btn--confirm.swal2-styled:hover {
+  background: var(--wa-accent-hover);
+}
+
+.wa-swal-btn--danger.swal2-styled {
+  background: var(--wa-danger);
+  color: #fff;
+}
+.wa-swal-btn--danger.swal2-styled:hover {
+  background: var(--wa-danger);
+  opacity: 0.88;
+}
+
+.wa-swal-btn--cancel.swal2-styled {
+  border: 1px solid var(--wa-border);
+  background: transparent;
+  color: var(--wa-accent);
+}
+.wa-swal-btn--cancel.swal2-styled:hover {
+  background: var(--wa-hover);
+}
+
+/* Icons: smaller, and their "cut-out" pieces must match the popup, not white. */
+.wa-swal-popup .swal2-icon {
+  width: 64px;
+  height: 64px;
+  margin: 4px auto 6px;
+  border-width: 3px;
+}
+.wa-swal-popup .swal2-icon .swal2-icon-content {
+  font-size: 2.6em;
+}
+.wa-swal-popup .swal2-icon.swal2-success {
+  border-color: var(--wa-accent);
+  color: var(--wa-accent);
+}
+.wa-swal-popup .swal2-icon.swal2-success [class^="swal2-success-line"] {
+  background-color: var(--wa-accent);
+}
+.wa-swal-popup .swal2-icon.swal2-success .swal2-success-ring {
+  border-color: color-mix(in srgb, var(--wa-accent) 30%, transparent);
+}
+.wa-swal-popup .swal2-icon.swal2-success [class^="swal2-success-circular-line"],
+.wa-swal-popup .swal2-icon.swal2-success .swal2-success-fix {
+  background: var(--wa-modal-bg);
+}
+.wa-swal-popup .swal2-icon.swal2-error {
+  border-color: var(--wa-danger);
+  color: var(--wa-danger);
+}
+.wa-swal-popup .swal2-icon.swal2-error [class^="swal2-x-mark-line"] {
+  background-color: var(--wa-danger);
+}
+.wa-swal-popup .swal2-icon.swal2-info,
+.wa-swal-popup .swal2-icon.swal2-question {
+  border-color: var(--wa-accent);
+  color: var(--wa-accent);
+}
+
+/* Toast */
+.swal2-container.wa-swal-toast-container {
+  padding: 0 16px 88px;
+  background: transparent;
+  pointer-events: none;
+}
+.swal2-popup.wa-swal-toast {
+  width: auto;
+  max-width: min(420px, 100%);
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--wa-toast-bg);
+  color: var(--wa-toast-fg);
+  box-shadow: 0 6px 24px var(--c-shadow, rgba(0, 0, 0, 0.25));
+}
+.wa-swal-toast .swal2-title {
+  margin: 0 0 0 8px;
+  padding: 0;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 400;
+}
+.wa-swal-toast .swal2-icon {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  margin: 0;
+  border-width: 2px;
+}
+.wa-swal-toast .swal2-icon .swal2-icon-content {
+  font-size: 1.1em;
+}
+.wa-swal-toast .swal2-icon.swal2-success [class^="swal2-success-circular-line"],
+.wa-swal-toast .swal2-icon.swal2-success .swal2-success-fix {
+  background: transparent;
+}

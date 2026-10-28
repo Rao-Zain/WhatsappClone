@@ -41,6 +41,15 @@ export async function protect(req, res, next) {
       });
     }
 
+        // Tokens issued before the last password reset are no longer valid.
+    // (Tokens without a version count as version 0.)
+    if ((decoded.tv ?? 0) !== (user.tokenVersion ?? 0)) {
+      return res.status(401).json({
+        success: false,
+        message: "Your session has ended. Please log in again.",
+      });
+    }
+
     // Attach the authenticated user to the request.
     req.user = user;
 

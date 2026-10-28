@@ -1,7 +1,7 @@
 
 import { ChevronRight, Info, LockKeyhole } from "lucide-react";
 import AuthInput from "./AuthInput";
-
+import { Link } from "react-router-dom";
 export default function AuthForm({
   mode,
   formData,
@@ -67,6 +67,17 @@ export default function AuthForm({
         error={errors.password}
         autoComplete={isSignup ? "new-password" : "current-password"}
       />
+
+        {!isSignup && (
+          <div className="-mt-2 mb-3 text-right">
+            <Link
+              to="/forgot-password"
+              className="text-[12px] font-medium text-[#008f69] hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
+        )}
 
       {!isSignup && (
         <label className="mb-5 flex cursor-pointer items-center gap-2 text-[12px]">

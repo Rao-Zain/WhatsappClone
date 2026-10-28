@@ -11,6 +11,7 @@ import { NavCountsProvider } from "./context/NavCountsContext";
 import AppLayout from "./components/AppLayout";
 import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
+  import ForgotPasswordPage from "./components/auth/ForgotPasswordPage";
 import SettingsPage from "./components/settings/SettingsPage";
 
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -27,6 +28,7 @@ export default function App() {
             <Route element={<GuestRoute />}>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
+                            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             </Route>
 
             {/* Routes that require authentication */}

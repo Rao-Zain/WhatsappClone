@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MoreVertical, RefreshCw, Star } from "lucide-react";
 import api from "../../../lib/api";
+import { confirmAction, toast } from "../../../lib/swal";
 import { getPreviewLabel } from "../../../lib/messagePreview";
 import PanelHeader from "./PanelHeader";
 import PanelSearch from "./PanelSearch";
@@ -98,14 +99,27 @@ export default function StarredMessagesView({ chats = [], onBack, onOpenChat }) 
   async function handleUnstarAll() {
     setMenuOpen(false);
 
+    const confirmed = await confirmAction({
+      title: "Unstar all messages?",
+      text: "They will be removed from your starred messages. The messages themselves stay in their chats.",
+      confirmText: "Unstar all",
+      danger: true,
+    });
+
+    if (!confirmed) return;
+
     const current = messages;
     setMessages([]);
 
-    await Promise.allSettled(
+   const results = await Promise.allSettled(
       current.map((message) =>
         api.post(`/conversations/${conversationIdOf(message)}/messages/${message._id}/star`)
       )
     );
+
+    const failed = results.filter((result) => result.status === "rejected").length;
+
+    if (failed) toast(`Couldn't unstar ${failed} of ${results.length} messages`, "error");
 
     load(); // resync in case some requests failed
   }

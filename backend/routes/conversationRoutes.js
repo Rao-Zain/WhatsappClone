@@ -24,6 +24,7 @@ import {
 } from "../controllers/groupController.js";
 
 import upload from "../middleware/uploadMiddleware.js";
+import { searchLimiter, messageLimiter } from "../middleware/rateLimiters.js";
 import {
    reactToMessage, toggleStarMessage, deleteMessage, forwardMessage, editMessage,
 } from "../controllers/messageActionsController.js";
@@ -41,6 +42,7 @@ router.use(protect);
 
 router.post(
   "/:conversationId/attachments",
+    messageLimiter, // before multer, so a flood is refused before any file is saved
   upload.array("files", 10),
   uploadMessage
 );
@@ -50,8 +52,7 @@ router.get(
   downloadAttachment
 );
 
-
-router.get("/search-users", searchUsersByPhone);
+router.get("/search-users", searchLimiter, searchUsersByPhone);
 
 router.get("/unread-summary", getUnreadSummary);
 
@@ -72,7 +73,7 @@ router.get("/", getConversations);
 router.post("/:conversationId/read", markConversationRead);
 router.get("/:conversationId/messages", getMessages);
 router.get("/:conversationId/search", searchMessages);
-router.post("/:conversationId/messages", sendMessage);
+router.post("/:conversationId/messages", messageLimiter, sendMessage);
 router.put("/:conversationId/messages/:messageId/reaction", reactToMessage);
 router.post("/:conversationId/messages/:messageId/star", toggleStarMessage);
 router.post("/:conversationId/messages/:messageId/forward", forwardMessage);

@@ -66,6 +66,14 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
 
+    
+    // Raised when the password is reset. Login tokens carry the number they were
+    // issued with; a token with an older number stops working everywhere.
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
+
     isOnline: {
       type: Boolean,
       default: false,

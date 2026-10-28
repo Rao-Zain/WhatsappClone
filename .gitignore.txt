@@ -1,0 +1,19 @@
+# Secrets: never commit these
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+dist/
+dist-ssr/
+
+# Files users upload while the app runs (private chats, status photos, avatars)
+backend/uploads/
+
+# Logs and editor files
+*.log
+logs/
+.DS_Store
+.vscode/
+.idea/

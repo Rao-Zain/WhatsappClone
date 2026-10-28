@@ -1,59 +1,14 @@
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Ban, Camera, KeyRound, LogOut, MoreVertical, Palette, Star, UserPlus, Users, Settings } from "lucide-react";
 import MyPinModal from "../chatRequests/MyPinModal";
 import ThemeModal from "../../theme/ThemeModal";
 import { useAuth } from "../../context/AuthContext";
-import api from "../../../lib/api";
+import { clearAuthHeader } from "../../../lib/api";
+import { confirmLogout } from "../../../lib/swal";
 import { getSocket } from "../../../lib/socket";
 
-/* Confirmation dialog, same look as the delete-message dialog */
-function LogoutDialog({ onCancel, onConfirm }) {
-  useEffect(() => {
-    const onKey = (event) => event.key === "Escape" && onCancel();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[110] grid place-items-center bg-[var(--wa-overlay)] p-4"
-      onMouseDown={onCancel}
-    >
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        aria-label="Log out"
-        onMouseDown={(event) => event.stopPropagation()}
-        className="wa-shadow-modal w-full max-w-[400px] rounded-2xl bg-[var(--wa-modal-bg)] p-6"
-      >
-        <h2 className="text-[19px] text-[color:var(--wa-text-primary)]">Log out?</h2>
-        <p className="mt-2 text-[14px] leading-5 text-[color:var(--wa-text-secondary)]">
-          You will need to sign in again to see your chats.
-        </p>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-full border border-[color:var(--wa-border)] px-5 py-2 text-sm font-medium text-[color:var(--wa-accent)] hover:bg-[var(--wa-menu-hover)]"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="rounded-full bg-[var(--wa-accent)] px-5 py-2 text-sm font-medium text-[color:var(--wa-accent-fg)] hover:bg-[var(--wa-accent-hover)]"
-          >
-            Log out
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
 
 export default function SidebarHeader({
   onNewChat,
@@ -69,7 +24,6 @@ export default function SidebarHeader({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
-  const [logoutOpen, setLogoutOpen] = useState(false);
     const [pinOpen, setPinOpen] = useState(false);
 
   useEffect(() => {
@@ -79,6 +33,10 @@ export default function SidebarHeader({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
+
+    async function handleLogoutClick() {
+    if (await confirmLogout()) performLogout();
+  }
 
   function performLogout() {
     // Go offline for other people and stop receiving messages.
@@ -94,15 +52,12 @@ export default function SidebarHeader({
       sessionStorage.removeItem(key);
     });
 
-    if (api?.defaults?.headers?.common) {
-      delete api.defaults.headers.common.Authorization;
-    }
+   clearAuthHeader();
 
     if (typeof auth.logout === "function") auth.logout();
     else auth.setUser?.(null);
 
     onLogout?.();
-    setLogoutOpen(false);
     navigate("/login", { replace: true });
   }
 
@@ -201,7 +156,7 @@ export default function SidebarHeader({
 
                 <div className="my-1 h-px bg-[var(--wa-menu-divider)]" />
 
-                <button type="button" role="menuitem" className={menuItem} onClick={run(() => setLogoutOpen(true))}>
+                <button type="button" role="menuitem" className={menuItem} onClick={run(handleLogoutClick)}>
                   <LogOut size={18} className="text-[color:var(--wa-menu-icon)]" />
                   Log out
                 </button>
@@ -223,7 +178,6 @@ export default function SidebarHeader({
 
       {themeOpen && <ThemeModal onClose={() => setThemeOpen(false)} />}
               {pinOpen && <MyPinModal onClose={() => setPinOpen(false)} />}
-      {logoutOpen && <LogoutDialog onCancel={() => setLogoutOpen(false)} onConfirm={performLogout} />}
     </header>
   );
 }

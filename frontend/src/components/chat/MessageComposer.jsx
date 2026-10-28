@@ -22,6 +22,8 @@ import ReplyPreview from "./ReplyPreview";
 import EditPreview from "./EditPreview";
 import WaveSurfer from "wavesurfer.js";
 import RecordPlugin from "wavesurfer.js/dist/plugins/record.esm.js";
+import { comingSoon } from "../../../lib/swal";
+
 
 export default function MessageComposer({
   onSendMessage,
@@ -480,22 +482,22 @@ useEffect(() => {
       }
 
       if (option.action === "contact") {
-        alert("Contact sharing UI can be implemented next.");
+       comingSoon("Sharing contacts");
         return;
       }
 
       if (option.action === "poll") {
-        alert("Poll creation UI can be implemented next.");
+        comingSoon("Polls");
         return;
       }
 
       if (option.action === "event") {
-        alert("Event creation UI can be implemented next.");
+        comingSoon("Events");
         return;
       }
 
       if (option.action === "sticker") {
-        alert("Sticker creation UI can be implemented next.");
+        comingSoon("Stickers");
         return;
       }
     }

@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import api from "../../../lib/api";
 import CropModal from "../settings/CropModal";
-
+import { confirmAction } from "../../../lib/swal";
 const MAX_NAME_LENGTH = 50;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
@@ -177,12 +177,17 @@ export default function GroupInfoPanel({ chat, currentUserId, onClose, onGroupUp
     }
   }
 
-  function handleRemove(member) {
+  async function handleRemove(member) {
     setMenuFor(null);
 
-    if (window.confirm(`Remove ${member.name} from the group?`)) {
-      run(() => api.delete(`${base}/members/${member.id}`));
-    }
+    const confirmed = await confirmAction({
+      title: `Remove ${member.name}?`,
+      text: "They will no longer be able to see new messages in this group.",
+      confirmText: "Remove",
+      danger: true,
+    });
+
+    if (confirmed) run(() => api.delete(`${base}/members/${member.id}`));
   }
 
   function handleToggleAdmin(member) {

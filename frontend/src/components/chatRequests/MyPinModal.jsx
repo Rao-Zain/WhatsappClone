@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Copy, RefreshCw } from "lucide-react";
 import api from "../../../lib/api";
 import { useAuth } from "../../context/AuthContext";
-
+import { alertError, confirmAction } from "../../../lib/swal";
 /* Shows my username + secret PIN so I can share them with someone who
    should be able to send me a chat request. */
 export default function MyPinModal({ onClose }) {
@@ -29,6 +29,15 @@ export default function MyPinModal({ onClose }) {
   async function regenerate() {
     if (busy) return;
 
+    const confirmed = await confirmAction({
+      title: "Create a new PIN?",
+      text: "Your current PIN will stop working. Anyone you gave it to will need the new one to send you a chat request.",
+      confirmText: "Create new PIN",
+      danger: true,
+    });
+
+    if (!confirmed) return;
+
     try {
       setBusy(true);
       setMessage("");
@@ -36,7 +45,8 @@ export default function MyPinModal({ onClose }) {
       setUser((previous) => (previous ? { ...previous, chatPin: response.data.chatPin } : previous));
       setMessage("New PIN created. The old one no longer works.");
     } catch (err) {
-      setMessage(err.response?.data?.message || "Unable to create a new PIN.");
+      setMessage("");
+      alertError(err, { title: "Couldn't create a new PIN", fallback: "Unable to create a new PIN." });
     } finally {
       setBusy(false);
     }

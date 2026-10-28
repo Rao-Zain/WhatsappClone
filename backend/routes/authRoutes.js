@@ -6,20 +6,32 @@ import {
   verifyOtp,
   resendOtp,
   login,
+  forgotPassword,
+  resetPassword,
   getMe,
   updateProfilePicture,
   updateProfile,
-    regenerateChatPin,
+  regenerateChatPin,
 } from "../controllers/authController.js";
 
 import { protect } from "../middleware/authMiddleware.js";
+import {
+  loginLimiter,
+  registerLimiter,
+  otpVerifyLimiter,
+  otpResendLimiter,
+  forgotPasswordLimiter,
+  resetPasswordLimiter,
+} from "../middleware/rateLimiters.js";
 
 const router = express.Router();
 
-router.post("/register", register);
-router.post("/verify-otp", verifyOtp);
-router.post("/resend-otp", resendOtp);
-router.post("/login", login);
+router.post("/register", registerLimiter, register);
+router.post("/verify-otp", otpVerifyLimiter, verifyOtp);
+router.post("/resend-otp", otpResendLimiter, resendOtp);
+router.post("/login", loginLimiter, login);
+router.post("/forgot-password", forgotPasswordLimiter, forgotPassword);
+router.post("/reset-password", resetPasswordLimiter, resetPassword);
 
 router.get("/me", protect, getMe);
 router.patch("/profile", protect, updateProfile);

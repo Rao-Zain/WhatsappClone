@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Call from "../models/Call.js";
 import { CALL_POPULATE, serializeCall } from "../controllers/callController.js";
 import { getBlockedMessage } from "../utils/blocks.js";
+import { createSocketLimiter } from "../utils/socketRateLimit.js";
 
 const RING_TIMEOUT_MS = 45_000;
 const MAX_PARTICIPANTS = 6; // mesh limit
@@ -82,7 +83,14 @@ export default function registerCallHandlers(io, socket) {
         );
     }
 
+        // At most 6 new calls per minute from one connection.
+    const allowCallStart = createSocketLimiter({ max: 6, windowMs: 60_000 });
+
     socket.on("call:start", async ({ conversationId, type }, ack) => {
+        if (!allowCallStart()) {
+            return ack?.({ ok: false, error: "You are starting calls too fast. Please wait a moment." });
+        }
+
         try {
 
             if (!mongoose.isValidObjectId(conversationId)) {

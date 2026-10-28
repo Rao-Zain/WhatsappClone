@@ -4,7 +4,9 @@ import AvatarButton from "./AvatarButton";
 import SettingsMenuItem from "./SettingsMenuItem";
 import SettingsSearch from "./SettingsSearch";
 import { SCROLL, SETTINGS_ITEMS } from "./constants";
-
+import { comingSoon } from "../../../lib/swal";
+import { isStandalone } from "../../../lib/push";
+import { openInstallDialog, openNotificationSettings } from "../../../lib/pushFlows";
 export default function SettingsMenuView({
   info,
   avatar,
@@ -18,9 +20,11 @@ export default function SettingsMenuView({
   const query = search.trim().toLowerCase();
   const items = SETTINGS_ITEMS.filter(
     (item) =>
-      !query ||
+      // No "Install app" once the app is installed.
+      (item.id !== "install" || !isStandalone()) &&
+      (!query ||
       item.label.toLowerCase().includes(query) ||
-      item.description.toLowerCase().includes(query)
+      item.description.toLowerCase().includes(query))
   );
 
   return (
@@ -71,8 +75,12 @@ export default function SettingsMenuView({
               description={description}
               active={activeItem === id}
               onClick={() => {
-                setActiveItem(id);
+                  setActiveItem(id);
+
                 if (id === "profile") onOpenProfile();
+                else if (id === "notifications") openNotificationSettings();
+                else if (id === "install") openInstallDialog();
+                else comingSoon(label); // not built yet: say so instead of doing nothing
               }}
             />
           ))}

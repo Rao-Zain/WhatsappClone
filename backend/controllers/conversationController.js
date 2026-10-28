@@ -6,6 +6,7 @@ import { REPLY_POPULATE, resolveReplyTarget, serializeMessage } from "../utils/s
 import { hasOnlineRecipient } from "../utils/messageDelivery.js";
 import { countMissedCalls } from "./callController.js";   // with the other imports
 import { getBlockedMessage, getBlockStates } from "../utils/blocks.js";
+import { notifyNewMessage } from "../utils/push.js";
 import fs from "fs";
 import path from "path";
 
@@ -940,6 +941,9 @@ export async function uploadMessage(req, res) {
         publicMessage
       );
     }
+
+    // Web Push for people who are not looking at the app.
+    if (io) void notifyNewMessage(io, conversation, publicMessage);
 
     return res.status(201).json({
       success: true,

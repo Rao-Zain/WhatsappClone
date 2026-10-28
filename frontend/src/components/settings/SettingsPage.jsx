@@ -7,6 +7,7 @@ import SettingsWorkspace from "./SettingsWorkspace";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../../lib/api";
+import { alertError, confirmLogout } from "../../../lib/swal";
 import { getSocket } from "../../../lib/socket";
 
 export default function SettingsPage({
@@ -32,8 +33,10 @@ export default function SettingsPage({
 
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    // Go offline for other people before the session is cleared.
+  const handleLogout = async () => {
+    if (!(await confirmLogout())) return;
+
+    // Go offline for other people before the session is cleared
     try {
       getSocket().disconnect();
     } catch {
@@ -123,10 +126,10 @@ export default function SettingsPage({
 
       return true;
     } catch (error) {
-      alert(
-        error.response?.data?.message ||
-          "Could not save your profile. Please try again."
-      );
+     alertError(error, {
+        title: "Couldn't save profile",
+        fallback: "Could not save your profile. Please try again.",
+      });
 
       return false;
     }

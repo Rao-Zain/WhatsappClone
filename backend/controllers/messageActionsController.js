@@ -8,7 +8,7 @@ import Message from "../models/Message.js";
 import { REPLY_POPULATE, serializeMessage } from "../utils/serializeMessage.js";
 import { hasOnlineRecipient } from "../utils/messageDelivery.js";
 import { getBlockedMessage } from "../utils/blocks.js";
-
+import { notifyNewMessage } from "../utils/push.js";
 const uploadDirectory = path.resolve("uploads/attachments");
 
 // Keep in sync with DELETE_FOR_EVERYONE_WINDOW_MS in ChatWindow.jsx.
@@ -448,7 +448,12 @@ export async function forwardMessage(req, res) {
           .populate("sender", "username name profilePicture")
           .populate(REPLY_POPULATE);
 
-        emitToParticipants(req, target, "message:new", serializeMessage(populated));
+       const forwardedPayload = serializeMessage(populated);
+
+        emitToParticipants(req, target, "message:new", forwardedPayload);
+
+        const forwardIo = req.app.get("io");
+        if (forwardIo) void notifyNewMessage(forwardIo, target, forwardedPayload);
 
         forwardedCount += 1;
       } catch (error) {
