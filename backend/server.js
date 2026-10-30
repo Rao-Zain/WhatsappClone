@@ -131,7 +131,7 @@ async function startServer() {
 
     console.log("MongoDB connected successfully");
 
-    httpServer.listen(PORT, "0.0.0.0", () => {
+    httpServer.listen(PORT, () => {
       console.log(`Server running at http://localhost:${PORT}`);
     });
 
