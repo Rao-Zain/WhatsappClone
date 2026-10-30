@@ -26,7 +26,7 @@ checkEnv(); // stops here with a clear message if the settings are wrong
 const app = express();
 const httpServer = createServer(app);
 
-const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+const clientUrl = process.env.CLIENT_URL || "https://hexachat.hexalogicx.com";
 
 // Behind a reverse proxy (Nginx, Render, Railway...) set TRUST_PROXY=1 in .env so
 // rate limits see each visitor's real IP. Leave it unset when there is no proxy.
@@ -131,7 +131,7 @@ async function startServer() {
 
     console.log("MongoDB connected successfully");
 
-    httpServer.listen(PORT, () => {
+    httpServer.listen(PORT,  () => {
       console.log(`Server running at http://localhost:${PORT}`);
     });
 
