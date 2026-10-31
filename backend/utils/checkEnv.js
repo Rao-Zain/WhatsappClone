@@ -20,8 +20,11 @@ export function checkEnv() {
     console.warn(`WARNING: ${message}`);
   }
 
-  const emailKeys = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS", "EMAIL_FROM"];
-  const missingEmail = emailKeys.filter((key) => !process.env[key]?.trim());
+  const emailKeys = ["BREVO_SENDER_EMAIL"];
+const missingEmail = emailKeys.filter((key) => !process.env[key]?.trim());
+if (!(process.env.BREVO_API_KEY || process.env.BREVO_API)?.trim()) {
+  missingEmail.push("BREVO_API_KEY");
+}
 
   if (missingEmail.length) {
     console.warn(
