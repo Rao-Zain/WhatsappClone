@@ -1,10 +1,39 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import api from "../../lib/api";
 
-const ICE_SERVERS = [
-  { urls: "stun:stun.l.google.com:19302" },
-  // Add TURN before sharing with real users (see notes below):
-  // { urls: "turn:YOUR_TURN_HOST:3478", username: "...", credential: "..." },
+// Used only when the server can't give us TURN details. STUN alone is NOT enough:
+// on mobile data, office Wi-Fi and many home routers the two phones can't reach each
+// other directly, so the call "sometimes works and sometimes doesn't".
+const FALLBACK_ICE_SERVERS = [
+  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
 ];
+
+const ICE_CACHE_MS = 30 * 60 * 1000; // TURN logins from the server last 1 hour
+const DISCONNECT_GRACE_MS = 3000;    // wait this long before treating "disconnected" as a problem
+const RETRY_EVERY_MS = 8000;         // while a connection is broken, try to repair it this often
+const MAX_ICE_RESTARTS = 3;          // then give up
+
+let iceCache = { servers: null, loadedAt: 0 };
+
+// STUN + TURN servers from our backend (GET /api/calls/ice-servers).
+async function loadIceServers() {
+  if (iceCache.servers && Date.now() - iceCache.loadedAt < ICE_CACHE_MS) {
+    return iceCache.servers;
+  }
+
+  try {
+    const { data } = await api.get("/calls/ice-servers");
+
+    if (Array.isArray(data.iceServers) && data.iceServers.length > 0) {
+      iceCache = { servers: data.iceServers, loadedAt: Date.now() };
+      return data.iceServers;
+    }
+  } catch {
+    /* fall back to STUN only */
+  }
+
+  return FALLBACK_ICE_SERVERS;
+}
 
 export default function useCall(socket) {
   const [callState, setCallState] = useState("idle"); // idle | incoming | outgoing | active
@@ -13,27 +42,52 @@ export default function useCall(socket) {
   const [remoteStreams, setRemoteStreams] = useState({}); // userId -> MediaStream
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [endReason, setEndReason] = useState(null);
 
   const peers = useRef(new Map());
-  const pending = useRef(new Map()); // queued ICE candidates
+  const peerMeta = useRef(new Map());    // userId -> { isOfferer, restarts, timer }
+  const remoteMedia = useRef(new Map()); // userId -> MediaStream (when the browser gives none)
+  const trouble = useRef(new Set());     // people whose connection is currently struggling
+  const pending = useRef(new Map());     // queued ICE candidates
   const localRef = useRef(null);
   const infoRef = useRef(null);
   const stateRef = useRef("idle");
+  const iceRef = useRef(FALLBACK_ICE_SERVERS);
 
   const updateInfo = (v) => { infoRef.current = v; setCallInfo(v); };
   const updateState = (v) => { stateRef.current = v; setCallState(v); };
+  const updateReconnecting = () => setReconnecting(trouble.current.size > 0);
+
+  // Get the TURN details ready before the first call.
+  useEffect(() => {
+    if (!socket) return;
+
+    loadIceServers().then((servers) => {
+      iceRef.current = servers;
+    });
+  }, [socket]);
+
+  const clearPeerState = (userId) => {
+    clearTimeout(peerMeta.current.get(userId)?.timer);
+    peerMeta.current.delete(userId);
+    remoteMedia.current.delete(userId);
+    trouble.current.delete(userId);
+    pending.current.delete(userId);
+  };
 
   const cleanup = useCallback(() => {
     peers.current.forEach((pc) => pc.close());
     peers.current.clear();
-    pending.current.clear();
+    [...peerMeta.current.keys()].forEach(clearPeerState);
+    trouble.current.clear();
     localRef.current?.getTracks().forEach((t) => t.stop());
     localRef.current = null;
     setLocalStream(null);
     setRemoteStreams({});
     setMuted(false);
     setCameraOff(false);
+    setReconnecting(false);
     updateInfo(null);
     updateState("idle");
   }, []);
@@ -41,7 +95,8 @@ export default function useCall(socket) {
   const removePeer = useCallback((userId) => {
     peers.current.get(userId)?.close();
     peers.current.delete(userId);
-    pending.current.delete(userId);
+    clearPeerState(userId);
+    updateReconnecting();
     setRemoteStreams((prev) => {
       const { [userId]: _, ...rest } = prev;
       return rest;
@@ -50,17 +105,65 @@ export default function useCall(socket) {
 
   const getMedia = async (type) => {
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: type === "video" ? { width: 1280, height: 720 } : false,
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video:
+        type === "video"
+          ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }
+          : false,
     });
     localRef.current = stream;
     setLocalStream(stream);
     return stream;
   };
 
-  const createPeer = useCallback((remoteId) => {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  const createPeer = useCallback((remoteId, isOfferer) => {
+    const pc = new RTCPeerConnection({
+      iceServers: iceRef.current,
+      iceCandidatePoolSize: 2,
+      bundlePolicy: "max-bundle",
+    });
+
+    peerMeta.current.set(remoteId, { isOfferer, restarts: 0, timer: null });
     localRef.current.getTracks().forEach((t) => pc.addTrack(t, localRef.current));
+
+    // The connection broke for good: end the call if nobody is left.
+    const giveUp = () => {
+      removePeer(remoteId);
+
+      if (peers.current.size === 0) {
+        socket.emit("call:leave");
+        setEndReason("The connection was lost. Please try calling again.");
+        cleanup();
+      }
+    };
+
+    // Ask both phones to find a new network path (new WebRTC offer with iceRestart).
+    const restartIce = async () => {
+      const meta = peerMeta.current.get(remoteId);
+
+      if (!meta || peers.current.get(remoteId) !== pc) return;
+      if (pc.connectionState === "connected" || pc.connectionState === "closed") return;
+      if (meta.restarts >= MAX_ICE_RESTARTS) return giveUp();
+
+      meta.restarts += 1;
+
+      try {
+        pc.restartIce?.();
+        const offer = await pc.createOffer({ iceRestart: true });
+        await pc.setLocalDescription(offer);
+        socket.emit("call:signal", {
+          conversationId: infoRef.current?.conversationId,
+          to: remoteId,
+          data: { sdp: pc.localDescription },
+        });
+      } catch (error) {
+        console.error("ICE restart failed:", error);
+      }
+
+      // Still not connected after a while? Try again.
+      clearTimeout(meta.timer);
+      meta.timer = setTimeout(restartIce, RETRY_EVERY_MS);
+    };
 
     pc.onicecandidate = (e) => {
       if (e.candidate) {
@@ -71,14 +174,45 @@ export default function useCall(socket) {
         });
       }
     };
-    pc.ontrack = (e) => setRemoteStreams((prev) => ({ ...prev, [remoteId]: e.streams[0] }));
+
+    pc.ontrack = (e) => {
+      // Some browsers give no stream with the track: build one ourselves.
+      let stream = e.streams[0];
+
+      if (!stream) {
+        stream = remoteMedia.current.get(remoteId) ?? new MediaStream();
+        stream.addTrack(e.track);
+      }
+
+      remoteMedia.current.set(remoteId, stream);
+      setRemoteStreams((prev) => ({ ...prev, [remoteId]: stream }));
+    };
+
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "failed") removePeer(remoteId);
+      const meta = peerMeta.current.get(remoteId);
+      if (!meta || peers.current.get(remoteId) !== pc) return;
+
+      clearTimeout(meta.timer);
+
+      if (pc.connectionState === "connected") {
+        meta.restarts = 0;
+        trouble.current.delete(remoteId);
+        updateReconnecting();
+      } else if (pc.connectionState === "disconnected") {
+        // Often fixes itself in a second or two (e.g. switching Wi-Fi to mobile data).
+        trouble.current.add(remoteId);
+        updateReconnecting();
+        meta.timer = setTimeout(restartIce, DISCONNECT_GRACE_MS);
+      } else if (pc.connectionState === "failed") {
+        trouble.current.add(remoteId);
+        updateReconnecting();
+        restartIce();
+      }
     };
 
     peers.current.set(remoteId, pc);
     return pc;
-  }, [socket, removePeer]);
+  }, [socket, removePeer, cleanup]);
 
   const flushCandidates = async (userId, pc) => {
     for (const c of pending.current.get(userId) ?? []) {
@@ -119,7 +253,14 @@ export default function useCall(socket) {
       try {
         if (data.sdp) {
           if (data.sdp.type === "offer") {
-            pc = pc ?? createPeer(from);
+            pc = pc ?? createPeer(from, false);
+
+            // Both sides sent an offer at the same moment: the one who started
+            // the connection wins, the other steps back and accepts.
+            const collision = pc.signalingState !== "stable";
+            if (collision && peerMeta.current.get(from)?.isOfferer) return;
+            if (collision) await pc.setLocalDescription({ type: "rollback" });
+
             await pc.setRemoteDescription(data.sdp);
             await flushCandidates(from, pc);
             const answer = await pc.createAnswer();
@@ -127,13 +268,14 @@ export default function useCall(socket) {
             socket.emit("call:signal", {
               conversationId, to: from, data: { sdp: pc.localDescription },
             });
-          } else if (pc) {
+          } else if (pc && pc.signalingState === "have-local-offer") {
             await pc.setRemoteDescription(data.sdp);
             await flushCandidates(from, pc);
           }
         } else if (data.candidate) {
           if (pc?.remoteDescription) {
-            await pc.addIceCandidate(data.candidate);
+            // Old candidates from before a restart can be refused: that's fine.
+            await pc.addIceCandidate(data.candidate).catch(() => {});
           } else {
             pending.current.set(from, [...(pending.current.get(from) ?? []), data.candidate]);
           }
@@ -167,6 +309,7 @@ export default function useCall(socket) {
       setEndReason("media-denied");
       return;
     }
+    iceRef.current = await loadIceServers();
     socket.emit("call:start", { conversationId, type }, (res) => {
       if (!res?.ok) {
         setEndReason(res?.error ?? "failed");
@@ -187,6 +330,7 @@ export default function useCall(socket) {
       socket.emit("call:reject", { conversationId: info.conversationId });
       return cleanup();
     }
+    iceRef.current = await loadIceServers();
     socket.emit("call:join", { conversationId: info.conversationId }, async (res) => {
       if (!res?.ok) {
         setEndReason(res?.error ?? "failed");
@@ -194,7 +338,7 @@ export default function useCall(socket) {
       }
       // I'm the new joiner, so I send an offer to everyone already in the call
       for (const userId of res.participants) {
-        const pc = createPeer(userId);
+        const pc = createPeer(userId, true);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         socket.emit("call:signal", {
@@ -233,7 +377,7 @@ export default function useCall(socket) {
   };
 
   return {
-    callState, callInfo, localStream, remoteStreams, muted, cameraOff, endReason,
+    callState, callInfo, localStream, remoteStreams, muted, cameraOff, reconnecting, endReason,
     startCall, acceptCall, declineCall, leaveCall, toggleMute, toggleCamera,
   };
 }

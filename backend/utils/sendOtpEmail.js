@@ -45,7 +45,7 @@
 //     await getTransporter().sendMail({
 //       from: process.env.EMAIL_FROM,
 //       to: email,
-//       subject: "Verify your WhatsApp Clone account",
+//       subject: "Verify your HexaChat account",
 //       text: [
 //         `Your verification code is: ${otp}`,
 //         "",
@@ -111,7 +111,7 @@
 //   await getTransporter().sendMail({
 //     from: process.env.EMAIL_FROM,
 //     to: email,
-//     subject: "Reset your WhatsApp Clone password",
+//     subject: "Reset your HexaChat password",
 //     text: [
 //       `Your password reset code is: ${otp}`,
 //       "",
@@ -140,7 +140,7 @@
 //   await getTransporter().sendMail({
 //     from: process.env.EMAIL_FROM,
 //     to: email,
-//     subject: "Your WhatsApp Clone password was changed",
+//     subject: "Your HexaChat password was changed",
 //     text: [
 //       "The password for your account was just changed, and you were signed out on all devices.",
 //       "",

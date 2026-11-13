@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  ChevronsRight,
-  Mic,
-  MicOff,
-  Phone,
-  PhoneOff,
-  Video,
-  VideoOff,
-} from "lucide-react";
-
+import { ChevronsRight,  Mic,  MicOff,  Phone,  PhoneOff,  Video,  VideoOff,  Volume2,} from "lucide-react";
+import useCallAudio from "../../hooks/useCallAudio";
 /* ------------------------------------------------------------------ */
 /* Small building blocks                                               */
 /* ------------------------------------------------------------------ */
@@ -50,12 +42,25 @@ function Avatar({ src, name, size = "size-40", text = "text-5xl", pulse = false 
   );
 }
 
-function StreamVideo({ stream, muted = false, mirror = false, className = "" }) {
+function StreamVideo({ stream, muted = false, mirror = false, sinkId, className = "" }) {
   const ref = useRef(null);
 
   useEffect(() => {
-    if (ref.current) ref.current.srcObject = stream;
+    const element = ref.current;
+    if (!element) return;
+
+    element.srcObject = stream;
+    // Browsers sometimes block autoplay: ask again.
+    element.play?.().catch(() => {});
   }, [stream]);
+
+  // Earpiece / loudspeaker (only where the browser allows choosing)
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || !sinkId || !element.setSinkId) return;
+
+    element.setSinkId(sinkId).catch(() => {});
+  }, [sinkId, stream]);
 
   // A <video> element also plays audio-only streams, so it covers voice calls too
   return (
@@ -82,7 +87,7 @@ function RoundButton({ onClick, label, active = false, danger = false, children 
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`grid size-14 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${tone}`}
+            className={`grid size-14 shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:size-16 ${tone}`}
     >
       {children}
     </button>
@@ -214,7 +219,8 @@ function IncomingScreen({ info, title, avatar, callerName, onAccept, onDecline }
 
       <Avatar src={avatar} name={title} pulse />
 
-      <div className="flex w-full flex-col items-center gap-4">
+              {/* Phone: slide to answer / decline */}
+        <div className="flex w-full flex-col items-center gap-4 sm:hidden">
         <SlideButton
           label="Slide to answer"
           tone="accept"
@@ -228,6 +234,34 @@ function IncomingScreen({ info, title, avatar, callerName, onAccept, onDecline }
           onComplete={onDecline}
         />
       </div>
+
+      
+        {/* Computer: plain buttons */}
+        <div className="hidden items-center gap-10 sm:flex">
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={onDecline}
+              aria-label="Decline call"
+              className="grid size-16 place-items-center rounded-full bg-[#ea3d3d] text-white transition-colors hover:bg-[#d93232] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              <PhoneOff size={26} />
+            </button>
+            <span className="text-sm text-white/70">Decline</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={onAccept}
+              aria-label="Answer call"
+              className="grid size-16 place-items-center rounded-full bg-[#25d366] text-white transition-colors hover:bg-[#1fbd5b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              {info.type === "video" ? <Video size={26} /> : <Phone size={26} />}
+            </button>
+            <span className="text-sm text-white/70">Answer</span>
+          </div>
+        </div>
     </div>
   );
 }
@@ -260,6 +294,7 @@ function formatDuration(seconds) {
 function ActiveScreen({
   call,
   title,
+  avatar,
   getUserName,
   getUserAvatar,
 }) {
@@ -269,6 +304,7 @@ function ActiveScreen({
     remoteStreams,
     muted,
     cameraOff,
+    reconnecting,
     leaveCall,
     toggleMute,
     toggleCamera,
@@ -282,53 +318,89 @@ function ActiveScreen({
   }, []);
 
   const isVideo = callInfo.type === "video";
+  const { speakerOn, canToggleSpeaker, toggleSpeaker, sinkId } = useCallAudio(isVideo);
   const remotes = Object.entries(remoteStreams);
-  const columns = remotes.length > 1 ? "grid-cols-2" : "grid-cols-1";
+  const single = remotes.length <= 1;
 
   return (
-    <div className="relative flex flex-1 flex-col">
-      {/* Header */}
-      <div className="relative z-10 flex flex-col items-center px-4 pt-6 text-center">
-        <h2 className="max-w-xs truncate text-lg">{title}</h2>
-        <p className="text-sm tabular-nums text-white/70">{formatDuration(seconds)}</p>
+    // min-h-0 + overflow-hidden: the screen can never grow taller than the window,
+    // so the buttons stay visible no matter how big the video is.
+    <div className="relative min-h-0 flex-1 overflow-hidden">
+      {/* Picture / avatars fill the whole screen; everything else floats on top */}
+      <div className="absolute inset-0">
+        {isVideo && remotes.length > 0 && (
+          <div
+            className={`grid size-full gap-2 p-2 ${
+              single ? "grid-cols-1 grid-rows-1" : "auto-rows-fr grid-cols-2"
+            }`}
+          >
+            {remotes.map(([userId, stream]) => (
+              <div
+                key={userId}
+                className="relative min-h-0 min-w-0 overflow-hidden rounded-2xl bg-[#111b21]"
+              >
+                <StreamVideo
+                  stream={stream}
+                  sinkId={sinkId}
+                  className={`absolute inset-0 size-full ${
+                    single ? "object-cover sm:object-contain" : "object-cover"
+                  }`}
+                />
+                <span className="absolute bottom-24 left-3 rounded-full bg-black/50 px-3 py-1 text-sm sm:bottom-28">
+                  {getUserName(userId)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Voice call, or a video call that is still connecting */}
+        {(!isVideo || remotes.length === 0) && (
+          <div className="flex size-full flex-wrap items-center justify-center gap-10 p-6">
+            {remotes.length === 0 ? (
+              <div className="flex flex-col items-center gap-3">
+                <Avatar src={avatar} name={title} pulse />
+                <span className="text-[15px] text-white/70">Connecting…</span>
+              </div>
+            ) : (
+              remotes.map(([userId]) => (
+                <div key={userId} className="flex flex-col items-center gap-3">
+                  <Avatar
+                    src={getUserAvatar(userId)}
+                    name={getUserName(userId)}
+                    size={remotes.length > 1 ? "size-24" : "size-40"}
+                    text={remotes.length > 1 ? "text-3xl" : "text-5xl"}
+                  />
+                  <span className="text-[15px]">{getUserName(userId)}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Voice call: these play the other person's voice without showing anything */}
+        {!isVideo &&
+          remotes.map(([userId, stream]) => (
+            <StreamVideo
+              key={userId}
+              stream={stream}
+              sinkId={sinkId}
+              className="pointer-events-none absolute size-0 opacity-0"
+            />
+          ))}
       </div>
 
-      {/* Participants */}
-      {isVideo ? (
-        <div className={`grid min-h-0 flex-1 gap-2 p-2 ${columns}`}>
-          {remotes.map(([userId, stream]) => (
-            <div
-              key={userId}
-              className="relative min-h-0 overflow-hidden rounded-2xl bg-[#111b21]"
-            >
-              <StreamVideo stream={stream} className="size-full object-cover" />
-              <span className="absolute bottom-3 left-3 rounded-full bg-black/50 px-3 py-1 text-sm">
-                {getUserName(userId)}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-wrap items-center justify-center gap-10 p-6">
-          {remotes.map(([userId, stream]) => (
-            <div key={userId} className="flex flex-col items-center gap-3">
-              <Avatar
-                src={getUserAvatar(userId)}
-                name={getUserName(userId)}
-                size={remotes.length > 1 ? "size-24" : "size-40"}
-                text={remotes.length > 1 ? "text-3xl" : "text-5xl"}
-              />
-              <span className="text-[15px]">{getUserName(userId)}</span>
-              {/* Keeps the remote audio playing without showing anything */}
-              <StreamVideo stream={stream} className="absolute size-0 opacity-0" />
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Header */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center bg-gradient-to-b from-black/60 to-transparent px-4 pb-8 pt-[calc(20px+env(safe-area-inset-top))] text-center">
+        <h2 className="max-w-xs truncate text-lg">{title}</h2>
+        <p className="text-sm tabular-nums text-white/70">
+          {reconnecting ? "Reconnecting…" : formatDuration(seconds)}
+        </p>
+      </div>
 
       {/* Local preview */}
       {isVideo && localStream && (
-        <div className="absolute bottom-28 right-4 h-36 w-28 overflow-hidden rounded-xl bg-[#111b21] shadow-xl ring-1 ring-white/20 sm:h-40 sm:w-32">
+        <div className="absolute bottom-28 right-4 z-10 h-36 w-28 overflow-hidden rounded-xl bg-[#111b21] shadow-xl ring-1 ring-white/20 sm:bottom-32 sm:h-40 sm:w-56">
           <StreamVideo
             stream={localStream}
             muted
@@ -338,9 +410,9 @@ function ActiveScreen({
         </div>
       )}
 
-      {/* Controls */}
-      <div className="relative z-10 flex justify-center pb-8 pt-4">
-        <div className="flex items-center gap-4 rounded-full bg-[#1f2c34] px-5 py-3 shadow-xl">
+      {/* Controls: pinned to the bottom of the screen */}
+      <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center bg-gradient-to-t from-black/60 to-transparent px-4 pb-[calc(24px+env(safe-area-inset-bottom))] pt-10">
+        <div className="flex items-center gap-3 rounded-full bg-[#1f2c34] px-4 py-3 shadow-xl sm:gap-5 sm:px-6">
           <RoundButton
             onClick={toggleMute}
             label={muted ? "Unmute" : "Mute"}
@@ -356,6 +428,16 @@ function ActiveScreen({
               active={cameraOff}
             >
               {cameraOff ? <VideoOff size={22} /> : <Video size={22} />}
+            </RoundButton>
+          )}
+
+          {canToggleSpeaker && (
+            <RoundButton
+              onClick={toggleSpeaker}
+              label={speakerOn ? "Speaker on (tap for earpiece)" : "Speaker off (tap to turn on)"}
+              active={speakerOn}
+            >
+              <Volume2 size={22} />
             </RoundButton>
           )}
 
@@ -391,7 +473,7 @@ export default function CallOverlay({
       role="dialog"
       aria-modal="true"
       aria-label={`${callInfo.type} call`}
-      className="fixed inset-0 z-[1000] flex flex-col bg-gradient-to-b from-[#0b141a] via-[#111b21] to-[#0b141a] text-white"
+           className="fixed inset-0 z-[1000] flex h-dvh flex-col overflow-hidden bg-gradient-to-b from-[#0b141a] via-[#111b21] to-[#0b141a] text-white"
     >
       {callState === "incoming" && (
         <IncomingScreen
@@ -417,6 +499,7 @@ export default function CallOverlay({
         <ActiveScreen
           call={call}
           title={title}
+                    avatar={avatar}
           getUserName={getUserName}
           getUserAvatar={getUserAvatar}
         />

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Call from "../models/Call.js";
 import User from "../models/User.js";
+  import crypto from "crypto";
 
 const idOf = (value) => String(value?._id || value);
 
@@ -162,3 +163,52 @@ export async function markCallsSeen(req, res) {
     });
   }
 }
+
+
+  /* ------------------------------------------------------------------ */
+  /* GET /api/calls/ice-servers                                          */
+  /* STUN + TURN details the browser needs to connect a call.            */
+  /*                                                                     */
+  /* Without a TURN server many calls (mobile data, office Wi-Fi, some   */
+  /* home routers) can never connect. Configure ONE of these in .env:    */
+  /*  A) your own coturn server:  TURN_URLS + TURN_SECRET                */
+  /*  B) a TURN provider:         TURN_URLS + TURN_USERNAME +            */
+  /*                              TURN_CREDENTIAL                        */
+  /* TURN_URLS is a comma-separated list, e.g.                           */
+  /*   turn:turn.example.com:3478,turns:turn.example.com:5349            */
+  /* ------------------------------------------------------------------ */
+  export function getIceServers(req, res) {
+    const iceServers = [
+      { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+    ];
+
+    const urls = (process.env.TURN_URLS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    if (urls.length && process.env.TURN_SECRET) {
+      // coturn "use-auth-secret" (TURN REST API): short-lived login made from the secret.
+      const ttl = Math.max(300, Number(process.env.TURN_TTL_SECONDS) || 3600);
+      const username = `${Math.floor(Date.now() / 1000) + ttl}:${req.user._id}`;
+      const credential = crypto
+        .createHmac("sha1", process.env.TURN_SECRET)
+        .update(username)
+        .digest("base64");
+
+      iceServers.push({ urls, username, credential });
+    } else if (urls.length && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL) {
+      // A TURN provider (Metered, Twilio, Xirsys...) with a fixed login.
+      iceServers.push({
+        urls,
+        username: process.env.TURN_USERNAME,
+        credential: process.env.TURN_CREDENTIAL,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      iceServers,
+      relayAvailable: iceServers.length > 1,
+    });
+  }

@@ -21,7 +21,7 @@ export const DEFAULT_PROFILE = {
   about: "Share a thought",
   username: "ZainiRao",
   pin: "1236",
-  phone: "+92 326 9787057",
+  phone: "",
 };
 
 export const SETTINGS_ITEMS = [

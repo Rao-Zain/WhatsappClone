@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { Check, CheckCheck, ChevronDown, Forward, Star, Download, FileText, Trash2, Play } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, CheckCheck, ChevronDown, Forward, Star, Download, FileText, Trash2 } from "lucide-react";
 import api from "../../../lib/api";
 import QuotedMessage from "./QuotedMessage";
 import VoiceNotePlayer from "./VoiceNotePlayer";
+import MessageMedia from "./MessageMedia";
 // import
 import HighlightedText from "./HighlightedText";
 
@@ -42,30 +43,30 @@ export default function MessageBubble({
   const isMe = message.sender === "me";
   const isRead = message.status === "read";
   const isDelivered = message.status === "delivered";
-  const attachments = message.attachments || [];
+  const attachments = useMemo(() => message.attachments || [], [message.attachments]);
+  const attachmentKey = attachments.map((file) => file._id).join("|");
 
   const [objectUrls, setObjectUrls] = useState({});
   const [loadingFiles, setLoadingFiles] = useState({});
 
-  // Preload URLs for media
+  // Download audio / voice files (photos and videos are handled by MessageMedia).
   useEffect(() => {
     let cancelled = false;
     const createdUrls = [];
 
-    async function loadMedia() {
-      const mediaFiles = attachments.filter((file) => {
+    async function loadAudio() {
+      const audioFiles = attachments.filter((file) => {
         const mime = file.mimeType || "";
         return (
-          mime.startsWith("image/") ||
-          mime.startsWith("video/") ||
           mime.startsWith("audio/") ||
-          message.type === "voice" ||
-          message.type === "audio"
+          ((message.type === "voice" || message.type === "audio") &&
+            !mime.startsWith("image/") &&
+            !mime.startsWith("video/"))
         );
       });
 
       const entries = await Promise.all(
-        mediaFiles.map(async (file) => {
+        audioFiles.map(async (file) => {
           if (file.url) return [file._id, file.url];
           if (!file.downloadUrl) return [file._id, null];
 
@@ -85,7 +86,7 @@ export default function MessageBubble({
       }
     }
 
-    loadMedia();
+    loadAudio();
 
     return () => {
       cancelled = true;
@@ -93,7 +94,9 @@ export default function MessageBubble({
         if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
       });
     };
-  }, [message.id, attachments]);
+    // attachmentKey is the stable identity of the attachments list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [message.id, message.type, attachmentKey]);
 
   // Separate visual media from documents & voice notes
   const visualMedia = attachments.filter((file) => {
@@ -132,18 +135,31 @@ export default function MessageBubble({
   const metaClass =
     "flex h-[15px] items-center gap-[3px] text-[11px] leading-[15px] text-[color:var(--wa-bubble-meta)]";
 
-  // Compute WhatsApp-style grid styling
   const totalVisual = visualMedia.length;
-  const gridLayoutClass =
-    totalVisual === 1
-      ? "grid-cols-1"
-      : totalVisual === 2
-      ? "grid-cols-2"
-      : "grid-cols-2";
+  const hasCaption = Boolean(message.text);
+
+  // Time + ticks drawn in white on top of the picture (no caption case).
+  const overlayMeta = (
+    <span className="flex items-center gap-[3px] text-[11px] leading-[15px] text-white">
+      {message.isEdited && <span>Edited</span>}
+      <span>{message.time || formatMessageTime(message.createdAt)}</span>
+      {isMe && (
+        <span
+          aria-label={statusLabel}
+          title={statusLabel}
+          className={isRead ? "text-[color:var(--wa-tick-read)]" : "text-white"}
+        >
+          {isDelivered || isRead ? <CheckCheck size={16} strokeWidth={2} /> : <Check size={16} strokeWidth={2} />}
+        </span>
+      )}
+    </span>
+  );
 
   return (
     <div
-      className={`wa-shadow-bubble relative min-w-0 max-w-[85%] rounded-lg px-[6px] pb-[6px] pt-[6px] sm:max-w-[70%] md:max-w-[55%] ${
+      className={`wa-shadow-bubble relative min-w-0 max-w-[85%] rounded-lg sm:max-w-[70%] md:max-w-[55%] ${
+        totalVisual > 0 ? "w-[330px] p-[3px]" : "p-[6px]"
+      } ${
         isMe ? "bg-[var(--wa-bubble-out-bg)]" : "bg-[var(--wa-bubble-in-bg)]"
       } ${showTail ? (isMe ? "rounded-tr-none" : "rounded-tl-none") : ""}`}
     >
@@ -194,72 +210,15 @@ export default function MessageBubble({
         </div>
       )}
 
-      {/* --- Visual Media Grid (Images & Videos) --- */}
+      {/* --- Photos & videos (WhatsApp-style) --- */}
       {totalVisual > 0 && (
-        <div className={`grid gap-1 overflow-hidden rounded-md ${gridLayoutClass} max-w-[340px] sm:max-w-[380px]`}>
-          {visualMedia.slice(0, 4).map((file, idx) => {
-            const url = objectUrls[file._id] || file.url || file.downloadUrl;
-            const isVideo = file.mimeType?.startsWith("video/");
-            const isFourthAndOverflow = idx === 3 && totalVisual > 4;
-
-            return (
-              <div
-                key={file._id}
-                className={`group/item relative overflow-hidden bg-black/5 ${
-                  totalVisual === 1
-                    ? "max-h-[360px] w-full"
-                    : totalVisual === 3 && idx === 0
-                    ? "col-span-2 h-[180px]"
-                    : "h-[140px] w-full"
-                }`}
-              >
-                {isVideo ? (
-                  <div
-                    onClick={() => onMediaClick?.(url)}
-                    className="relative flex h-full w-full cursor-pointer items-center justify-center bg-black"
-                  >
-                    <video src={url} preload="metadata" className="h-full w-full object-cover" />
-                    <span className="absolute flex size-10 items-center justify-center rounded-full bg-black/60 text-white shadow">
-                      <Play size={20} className="ml-0.5 fill-current" />
-                    </span>
-                  </div>
-                ) : (
-                  <img
-                    src={url}
-                    alt={file.originalName}
-                    onClick={() => onMediaClick?.(url)}
-                    className="h-full w-full cursor-pointer object-cover transition hover:scale-[1.02]"
-                  />
-                )}
-
-                {/* +N Overlay if more than 4 files */}
-                {isFourthAndOverflow && (
-                  <div
-                    onClick={() => onMediaClick?.(url)}
-                    className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/60 text-2xl font-semibold text-white"
-                  >
-                    +{totalVisual - 3}
-                  </div>
-                )}
-
-                {/* Single Item Delete Option */}
-                {isMe && onDeleteAttachment && (
-                  <button
-                    type="button"
-                    title="Delete this file"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteAttachment(message.id, file._id);
-                    }}
-                    className="absolute right-1.5 top-1.5 z-10 hidden rounded-full bg-black/60 p-1.5 text-white transition hover:bg-red-600 group-hover/item:block"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <MessageMedia
+          files={visualMedia}
+          timeOverlay={hasCaption || otherFiles.length > 0 ? null : overlayMeta}
+          canDelete={isMe && Boolean(onDeleteAttachment)}
+          onDelete={(fileId) => onDeleteAttachment?.(message.id, fileId)}
+          onOpen={onMediaClick}
+        />
       )}
 
       {/* --- Other Documents & Audio Files --- */}
@@ -314,11 +273,15 @@ export default function MessageBubble({
 
       {/* Text & Meta */}
       {message.text ? (
-        <p className="whitespace-pre-wrap break-words px-1 pt-1 text-[14.2px] leading-[19px] text-[color:var(--wa-bubble-text)]">
+        <p
+          className={`whitespace-pre-wrap break-words pt-1 text-[14.2px] leading-[19px] text-[color:var(--wa-bubble-text)] ${
+            totalVisual > 0 ? "px-[5px] pb-[3px]" : "px-1"
+          }`}
+        >
                    <HighlightedText text={message.text} query={highlight} />
           <span className={`${metaClass} float-right -mb-[2px] ml-[10px] mt-[4px]`}>{meta}</span>
         </p>
-      ) : (
+      ) : totalVisual > 0 && otherFiles.length === 0 ? null : (
         <div className={`${metaClass} justify-end px-1 pt-1`}>{meta}</div>
       )}
     </div>

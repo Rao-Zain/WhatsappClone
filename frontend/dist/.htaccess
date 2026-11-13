@@ -1,0 +1,22 @@
+# Single-page app: send every page address to index.html (fixes 404 on /app, /signup, /login ...)
+# Works on Apache, cPanel and LiteSpeed hosting. Vite copies this file into dist/ on every build.
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Real files and folders (assets, icons, sw.js ...) are served as they are
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Everything else is a page of the app
+  RewriteRule ^ /index.html [L]
+</IfModule>
+
+# The app shell and service worker must never be cached, or users keep an old version
+<IfModule mod_headers.c>
+  <FilesMatch "^(index\.html|sw\.js|manifest\.webmanifest)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+</IfModule>

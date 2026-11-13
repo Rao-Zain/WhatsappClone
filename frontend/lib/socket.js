@@ -1,7 +1,7 @@
 
 import { io } from "socket.io-client";
 
-const SOCKET_URL ="https://web-hexachat.onrender.com";
+import { SOCKET_URL } from "./config";
 
 let socket;
 

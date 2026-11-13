@@ -29,6 +29,7 @@ export default function SettingsPage({
     name: user?.name ?? profile?.name ?? DEFAULT_PROFILE.name ?? "",
     username: user?.username ?? profile?.username ?? DEFAULT_PROFILE.username,
     about: user?.about ?? profile?.about ?? DEFAULT_PROFILE.about,
+    phone: user?.phone ?? profile?.phone ?? DEFAULT_PROFILE.phone ?? "",
   });
 
   const navigate = useNavigate();
@@ -60,8 +61,9 @@ export default function SettingsPage({
       name: user.name ?? previous.name,
       username: user.username ?? previous.username,
       about: user.about ?? previous.about,
+      phone: user.phone ?? previous.phone,
     }));
-  }, [user?.name, user?.username, user?.about]);
+  }, [user?.name, user?.username, user?.about, user?.phone]);
 
   const [avatarError, setAvatarError] = useState("");
 

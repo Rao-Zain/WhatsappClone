@@ -20,6 +20,7 @@ import useTheme from "../../theme/useTheme"
 import EmojiPicker from "emoji-picker-react";
 import ReplyPreview from "./ReplyPreview";
 import EditPreview from "./EditPreview";
+import CameraCapture from "./CameraCapture";
 import WaveSurfer from "wavesurfer.js";
 import RecordPlugin from "wavesurfer.js/dist/plugins/record.esm.js";
 import { comingSoon } from "../../../lib/swal";
@@ -57,6 +58,7 @@ export default function MessageComposer({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [showCamera, setShowCamera] = useState(false);
 const [previewUrls, setPreviewUrls] = useState([]);
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -469,15 +471,36 @@ useEffect(() => {
     });
   }
 
+  // Fallback: the phone's own camera app, for photo or video.
+  function openNativeCamera() {
+    setShowCamera(false);
+    const input = fileInputRef.current;
+    if (!input) return;
+    input.accept = "image/*,video/*";
+    input.setAttribute("capture", "environment");
+    input.click();
+  }
+
+  // Send a photo or video taken in the camera screen straight away.
+  async function sendCapturedMedia(file, caption) {
+    setSendError("");
+    onStopTyping?.();
+    await onSendMessage(caption, [file]);
+  }
+
   function openFilePicker(option) {
     setShowAttachmentMenu(false);
     setShowEmojiPicker(false);
 
     if (option.action) {
       if (option.action === "camera") {
-        fileInputRef.current.accept = "image/*";
-        fileInputRef.current.setAttribute("capture", "environment");
-        fileInputRef.current.click();
+        // Live camera (photo + video) when the browser allows it,
+        // otherwise hand over to the device's own camera app.
+        if (navigator.mediaDevices?.getUserMedia) {
+          setShowCamera(true);
+        } else {
+          openNativeCamera();
+        }
         return;
       }
 
@@ -635,6 +658,16 @@ useEffect(() => {
             })}
           </div>
         </>
+      )}
+
+      {/* Camera: take a photo or video, then send */}
+      {showCamera && (
+        <CameraCapture
+          onClose={() => setShowCamera(false)}
+          onSend={sendCapturedMedia}
+          onFallback={openNativeCamera}
+          uploadProgress={uploadProgress}
+        />
       )}
 
       {/* Hidden file input */}

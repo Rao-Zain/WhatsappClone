@@ -1,8 +1,10 @@
 
 import axios from "axios";
 import { alertInfo } from "./swal";
+import { API_URL } from "./config";
+
 const api = axios.create({
-  baseURL:"https://web-hexachat.onrender.com/api",
+  baseURL: API_URL,
 });
 
 // Attach the saved JWT to authenticated API requests.

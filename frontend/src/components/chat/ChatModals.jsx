@@ -1,7 +1,10 @@
 import Lightbox from "yet-another-react-lightbox";
 import Download from "yet-another-react-lightbox/plugins/download";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import Video from "yet-another-react-lightbox/plugins/video";
+import Counter from "yet-another-react-lightbox/plugins/counter";
 import "yet-another-react-lightbox/styles.css";
+import "yet-another-react-lightbox/plugins/counter.css";
 
 import MessageContextMenu from "./MessageContextMenu";
 import ForwardModal from "./ForwardModal";
@@ -86,7 +89,10 @@ export default function ChatModals({
         index={lightboxIndex}
         close={onCloseLightbox}
         slides={mediaSlides}
-        plugins={[Download, Zoom]}
+        plugins={mediaSlides.length > 1 ? [Video, Download, Zoom, Counter] : [Video, Download, Zoom]}
+        video={{ controls: true, playsInline: true, autoPlay: true }}
+        carousel={{ finite: true }}
+        controller={{ closeOnBackdropClick: true }}
       />
     </>
   );

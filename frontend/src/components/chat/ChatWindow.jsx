@@ -212,9 +212,12 @@ export default function ChatWindow({
     }
   };
 
-  const handleMediaClick = (url) => {
-    setMediaSlides([{ src: url }]);
-    setLightboxIndex(0);
+  // Opens the full-screen viewer on one photo/video of a message,
+  // with the rest of that message's media available by swiping.
+  const handleMediaClick = (slides, index = 0) => {
+    if (!slides?.length) return;
+    setMediaSlides(slides);
+    setLightboxIndex(index);
   };
 
   const handleStar = async (msg) => {
