@@ -165,29 +165,108 @@ export async function markCallsSeen(req, res) {
 }
 
 
-  /* ------------------------------------------------------------------ */
-  /* GET /api/calls/ice-servers                                          */
-  /* STUN + TURN details the browser needs to connect a call.            */
-  /*                                                                     */
-  /* Without a TURN server many calls (mobile data, office Wi-Fi, some   */
-  /* home routers) can never connect. Configure ONE of these in .env:    */
-  /*  A) your own coturn server:  TURN_URLS + TURN_SECRET                */
-  /*  B) a TURN provider:         TURN_URLS + TURN_USERNAME +            */
-  /*                              TURN_CREDENTIAL                        */
-  /* TURN_URLS is a comma-separated list, e.g.                           */
-  /*   turn:turn.example.com:3478,turns:turn.example.com:5349            */
-  /* ------------------------------------------------------------------ */
-  export function getIceServers(req, res) {
-    const iceServers = [
-      { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-    ];
+ /* ------------------------------------------------------------------ */
+/* GET /api/calls/ice-servers                                          */
+/* STUN + TURN details the browser needs to connect a call.            */
+/*                                                                     */
+/* Without a TURN server many calls (mobile data, office Wi-Fi, some   */
+/* home routers) can never connect. Pick ONE way to get TURN:          */
+/*                                                                     */
+/*  A) Cloudflare (free up to 1,000 GB a month, no server to run):     */
+/*       CLOUDFLARE_TURN_KEY_ID + CLOUDFLARE_TURN_API_TOKEN            */
+/*  B) A provider with a fixed login (e.g. Metered Open Relay):        */
+/*       TURN_URLS + TURN_USERNAME + TURN_CREDENTIAL                   */
+/*  C) Your own coturn server:                                         */
+/*       TURN_URLS + TURN_SECRET                                       */
+/*                                                                     */
+/* TURN_URLS is a comma-separated list, e.g.                           */
+/*   turn:turn.example.com:3478,turns:turn.example.com:5349            */
+/* ------------------------------------------------------------------ */
+
+const GOOGLE_STUN = {
+  urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"],
+};
+
+// Cloudflare logins last 2 hours. We ask for a new one every 30 minutes and share
+// it between users, so Cloudflare is contacted a few times an hour, not per call.
+const CLOUDFLARE_LOGIN_SECONDS = 2 * 60 * 60;
+const CLOUDFLARE_REUSE_MS = 30 * 60 * 1000;
+
+let cloudflareCache = { servers: null, fetchedAt: 0 };
+
+async function getCloudflareIceServers() {
+  const keyId = process.env.CLOUDFLARE_TURN_KEY_ID?.trim();
+  const apiToken = process.env.CLOUDFLARE_TURN_API_TOKEN?.trim();
+
+  if (!keyId || !apiToken) return null;
+
+  if (
+    cloudflareCache.servers &&
+    Date.now() - cloudflareCache.fetchedAt < CLOUDFLARE_REUSE_MS
+  ) {
+    return cloudflareCache.servers;
+  }
+
+  try {
+    const response = await fetch(
+      `https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(
+        keyId
+      )}/credentials/generate-ice-servers`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ttl: CLOUDFLARE_LOGIN_SECONDS }),
+        signal: AbortSignal.timeout(5000),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Cloudflare answered with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const list = Array.isArray(data.iceServers) ? data.iceServers : [data.iceServers];
+
+    const servers = list
+      .filter(Boolean)
+      .map((server) => ({
+        ...server,
+        // Port 53 is blocked by web browsers and only causes a long wait.
+        urls: [server.urls].flat().filter((url) => !/:53(\?|$)/.test(url)),
+      }))
+      .filter((server) => server.urls.length > 0);
+
+    if (!servers.some((server) => server.username && server.credential)) {
+      throw new Error("the answer has no TURN login");
+    }
+
+    cloudflareCache = { servers, fetchedAt: Date.now() };
+    return servers;
+  } catch (error) {
+    console.error("Cloudflare TURN request failed:", error.message);
+
+    // An older login is still valid for a long time: better than nothing.
+    return cloudflareCache.servers;
+  }
+}
+
+export async function getIceServers(req, res) {
+  try {
+    let iceServers = [GOOGLE_STUN];
+
+    const cloudflare = await getCloudflareIceServers();
 
     const urls = (process.env.TURN_URLS || "")
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
 
-    if (urls.length && process.env.TURN_SECRET) {
+    if (cloudflare) {
+      iceServers = [...cloudflare, GOOGLE_STUN];
+    } else if (urls.length && process.env.TURN_SECRET) {
       // coturn "use-auth-secret" (TURN REST API): short-lived login made from the secret.
       const ttl = Math.max(300, Number(process.env.TURN_TTL_SECONDS) || 3600);
       const username = `${Math.floor(Date.now() / 1000) + ttl}:${req.user._id}`;
@@ -209,6 +288,16 @@ export async function markCallsSeen(req, res) {
     return res.status(200).json({
       success: true,
       iceServers,
-      relayAvailable: iceServers.length > 1,
+      relayAvailable: iceServers.some((server) => server.username),
+    });
+  } catch (error) {
+    console.error("ICE servers error:", error);
+
+    // Calls can still work through STUN alone, so don't fail the request.
+    return res.status(200).json({
+      success: true,
+      iceServers: [GOOGLE_STUN],
+      relayAvailable: false,
     });
   }
+}
