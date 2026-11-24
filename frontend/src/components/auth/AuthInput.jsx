@@ -1,6 +1,5 @@
-
 import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 
 export default function AuthInput({
   id,
@@ -12,21 +11,34 @@ export default function AuthInput({
   onChange,
   error,
   autoComplete,
+  icon: Icon,
+  labelAction = null,
+  disabled = false,
 }) {
   const [showPassword, setShowPassword] = useState(false);
-
   const isPassword = type === "password";
 
   return (
     <div className="mb-4">
-      <label
-        htmlFor={id}
-        className="mb-1.5 block text-[13px] font-medium"
-      >
-        {label}
-      </label>
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <label
+          htmlFor={id}
+          className="text-[13px] font-semibold text-[color:var(--wa-text-strong)]"
+        >
+          {label}
+        </label>
+        {labelAction}
+      </div>
 
       <div className="relative">
+        {Icon && (
+          <Icon
+            size={18}
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[color:var(--wa-icon)]"
+          />
+        )}
+
         <input
           id={id}
           name={name}
@@ -35,18 +47,23 @@ export default function AuthInput({
           onChange={onChange}
           placeholder={placeholder}
           autoComplete={autoComplete}
+          disabled={disabled}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? `${id}-error` : undefined}
-          className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-[#202c33] outline-none transition placeholder:text-[#8696a0] focus:border-[#00a884] focus:ring-2 focus:ring-[#00a884]/10 ${
-            error ? "border-red-400" : "border-[#d1d7db]"
-          } ${isPassword ? "pr-11" : ""}`}
+          className={`h-12 w-full rounded-xl border bg-[var(--wa-auth-input-bg)] text-[15px] text-[color:var(--wa-text-primary)] outline-none transition placeholder:text-[color:var(--wa-search-placeholder)] focus:bg-[var(--wa-auth-card-bg)] focus:ring-4 disabled:opacity-60 ${
+            Icon ? "pl-11" : "pl-3.5"
+          } ${isPassword ? "pr-11" : "pr-3.5"} ${
+            error
+              ? "border-[color:var(--wa-danger)] focus:border-[color:var(--wa-danger)] focus:ring-[var(--wa-auth-error-border)]"
+              : "border-[color:var(--wa-auth-input-border)] focus:border-[color:var(--wa-accent)] focus:ring-[var(--wa-auth-ring)]"
+          }`}
         />
 
         {isPassword && (
           <button
             type="button"
             onClick={() => setShowPassword((previous) => !previous)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#667781] hover:text-[#111b21]"
+            className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-[color:var(--wa-icon)] transition hover:bg-[var(--wa-hover)] hover:text-[color:var(--wa-text-primary)]"
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -55,7 +72,11 @@ export default function AuthInput({
       </div>
 
       {error && (
-        <p id={`${id}-error`} className="mt-1 text-xs text-red-600">
+        <p
+          id={`${id}-error`}
+          className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-[color:var(--wa-danger)]"
+        >
+          <AlertCircle size={13} className="shrink-0" />
           {error}
         </p>
       )}

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { CheckCircle2, KeyRound, RefreshCw } from "lucide-react";
+import { ArrowLeft, KeyRound, Lock, Mail, RefreshCw, ShieldCheck } from "lucide-react";
 
 import api from "../../../lib/api";
-import AuthHeader from "./AuthHeader";
+import AuthLayout, { AuthCardHeader } from "./AuthLayout";
+import AuthAlert from "./AuthAlert";
 import AuthInput from "./AuthInput";
+import { linkClass, otpInputClass, primaryButtonClass } from "./authStyles";
 
 const RESEND_SECONDS = 60; // keep in sync with OTP_RESEND_COOLDOWN_SECONDS on the server
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -135,205 +137,182 @@ export default function ForgotPasswordPage() {
     }
   };
 
-  const primaryButton =
-    "mt-2 flex min-h-[46px] w-full items-center justify-center gap-2 rounded-full bg-[#00a884] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#02906f] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50";
+  const primaryButton = `${primaryButtonClass} mt-2`;
 
   return (
-    <div className="relative h-full w-full overflow-y-auto bg-[#f0f2f5] font-sans text-[#111b21] antialiased">
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 hidden h-[222px] bg-[#00a884] lg:block"
-        aria-hidden="true"
+    <AuthLayout>
+      <AuthCardHeader
+        icon={KeyRound}
+        title={step === "email" ? "Forgot your password?" : "Choose a new password"}
+        subtitle={
+          step === "email"
+            ? "Enter the email address of your account and we'll send you a 6-digit code to reset your password."
+            : undefined
+        }
       />
 
-      <div className="relative z-10 flex min-h-full flex-col">
-        <AuthHeader />
+      {formError && <AuthAlert kind="error">{formError}</AuthAlert>}
 
-        <main className="mx-auto w-full max-w-[520px] flex-1 px-4 py-6 sm:px-6 sm:py-10">
-          <section className="w-full rounded-2xl border border-[#e9edef] bg-white p-6 shadow-sm sm:rounded-3xl sm:p-8 sm:shadow-md">
-            <div className="mb-5 flex items-center gap-3">
-              <span className="grid size-11 shrink-0 place-items-center rounded-full bg-[#d9fdd3] text-[#008f69]">
-                <KeyRound size={22} />
-              </span>
-              <h1 className="text-xl font-semibold sm:text-2xl">
-                {step === "email" ? "Forgot your password?" : "Choose a new password"}
-              </h1>
-            </div>
+      {step === "email" ? (
+        <form onSubmit={handleSendCode} noValidate>
+          <AuthInput
+            id="forgot-email"
+            label="Email address"
+            name="email"
+            type="email"
+            icon={Mail}
+            placeholder="you@example.com"
+            value={email}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setErrors({});
+              setFormError("");
+            }}
+            error={errors.email}
+            autoComplete="email"
+          />
 
-            {formError && (
-              <div
-                role="alert"
-                className="mb-4 rounded-xl border border-red-200 bg-[#fde8e8] px-4 py-3 text-sm text-[#bc1c1c] shadow-xs"
-              >
-                {formError}
-              </div>
-            )}
-
-            {step === "email" ? (
-              <form onSubmit={handleSendCode} noValidate>
-                <p className="mb-5 text-sm leading-6 text-[#667781]">
-                  Enter the email address of your account. We will send you a
-                  6-digit code to reset your password.
-                </p>
-
-                <AuthInput
-                  id="forgot-email"
-                  label="Email address"
-                  name="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(event) => {
-                    setEmail(event.target.value);
-                    setErrors({});
-                    setFormError("");
-                  }}
-                  error={errors.email}
-                  autoComplete="email"
-                />
-
-                <button type="submit" disabled={isBusy} className={primaryButton}>
-                  {isBusy ? (
-                    <>
-                      <RefreshCw size={17} className="animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    "Send reset code"
-                  )}
-                </button>
-              </form>
+          <button type="submit" disabled={isBusy} className={primaryButton}>
+            {isBusy ? (
+              <>
+                <RefreshCw size={18} className="animate-spin" />
+                Sending...
+              </>
             ) : (
-              <form onSubmit={handleReset} noValidate>
-                {notice && (
-                  <div
-                    role="status"
-                    className="mb-4 flex items-start gap-2 rounded-xl border border-[#b7e4c7] bg-[#d9fdd3] px-4 py-3 text-sm text-[#166534]"
-                  >
-                    <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
-                    <span>{notice}</span>
-                  </div>
-                )}
-
-                <p className="mb-4 text-sm leading-6 text-[#667781]">
-                  Code sent to{" "}
-                  <span className="break-all font-semibold text-[#111b21]">{email.trim()}</span>
-                </p>
-
-                <label
-                  htmlFor="reset-otp"
-                  className="mb-1.5 block text-[13px] font-medium"
-                >
-                  Reset code
-                </label>
-
-                <input
-                  id="reset-otp"
-                  name="otp"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  placeholder="000000"
-                  value={otp}
-                  disabled={isBusy}
-                  onChange={(event) => {
-                    setOtp(event.target.value.replace(/\D/g, "").slice(0, 6));
-                    setErrors((previous) => ({ ...previous, otp: "" }));
-                    setFormError("");
-                  }}
-                  className={`mb-1 w-full rounded-xl border bg-white px-3 py-3 text-center font-mono text-xl tracking-[0.35em] outline-none transition placeholder:text-[#c5cbd0] focus:border-[#00a884] focus:ring-2 focus:ring-[#00a884]/20 disabled:bg-[#f0f2f5] sm:text-2xl ${
-                    errors.otp ? "border-red-400" : "border-[#d1d7db]"
-                  }`}
-                />
-
-                {errors.otp && (
-                  <p className="mb-3 text-xs text-red-600">{errors.otp}</p>
-                )}
-
-                <div className="mt-4">
-                  <AuthInput
-                    id="reset-new-password"
-                    label="New password"
-                    name="newPassword"
-                    type="password"
-                    placeholder="At least 8 characters"
-                    value={newPassword}
-                    onChange={(event) => {
-                      setNewPassword(event.target.value);
-                      setErrors((previous) => ({ ...previous, newPassword: "" }));
-                      setFormError("");
-                    }}
-                    error={errors.newPassword}
-                    autoComplete="new-password"
-                  />
-
-                  <AuthInput
-                    id="reset-confirm-password"
-                    label="Confirm new password"
-                    name="confirmPassword"
-                    type="password"
-                    placeholder="Type it again"
-                    value={confirmPassword}
-                    onChange={(event) => {
-                      setConfirmPassword(event.target.value);
-                      setErrors((previous) => ({ ...previous, confirmPassword: "" }));
-                      setFormError("");
-                    }}
-                    error={errors.confirmPassword}
-                    autoComplete="new-password"
-                  />
-                </div>
-
-                <button type="submit" disabled={isBusy} className={primaryButton}>
-                  {isBusy ? (
-                    <>
-                      <RefreshCw size={17} className="animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    "Reset password"
-                  )}
-                </button>
-
-                <div className="mt-5 text-center text-xs leading-5 text-[#667781]">
-                  <p className="mb-1">Didn't get the email? Check your spam folder.</p>
-
-                  <button
-                    type="button"
-                    onClick={handleResend}
-                    disabled={cooldown > 0 || isBusy}
-                    className="text-sm font-medium text-[#008f69] hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50"
-                  >
-                    {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code"}
-                  </button>
-
-                  <span className="mx-2">·</span>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep("email");
-                      setOtp("");
-                      setErrors({});
-                      setFormError("");
-                      setNotice("");
-                    }}
-                    className="text-sm font-medium text-[#008f69] hover:underline"
-                  >
-                    Use a different email
-                  </button>
-                </div>
-              </form>
+              "Send reset code"
             )}
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handleReset} noValidate>
+          {notice && <AuthAlert kind="success">{notice}</AuthAlert>}
 
-            <p className="mt-6 text-center text-sm">
-              <Link to="/login" className="font-medium text-[#008f69] hover:underline">
-                Back to log in
-              </Link>
+          <p className="-mt-3 mb-5 text-[14px] leading-6 text-[color:var(--wa-text-secondary)]">
+            Code sent to{" "}
+            <span className="break-all font-semibold text-[color:var(--wa-text-primary)]">
+              {email.trim()}
+            </span>
+          </p>
+
+          <label
+            htmlFor="reset-otp"
+            className="mb-1.5 block text-[13px] font-semibold text-[color:var(--wa-text-strong)]"
+          >
+            Reset code
+          </label>
+
+          <input
+            id="reset-otp"
+            name="otp"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            placeholder="000000"
+            value={otp}
+            disabled={isBusy}
+            onChange={(event) => {
+              setOtp(event.target.value.replace(/\D/g, "").slice(0, 6));
+              setErrors((previous) => ({ ...previous, otp: "" }));
+              setFormError("");
+            }}
+            className={`${otpInputClass} ${
+              errors.otp
+                ? "border-[color:var(--wa-danger)]"
+                : "border-[color:var(--wa-auth-input-border)]"
+            }`}
+          />
+
+          {errors.otp && (
+            <p className="mt-1.5 text-[12.5px] text-[color:var(--wa-danger)]">
+              {errors.otp}
             </p>
-          </section>
-        </main>
-      </div>
-    </div>
+          )}
+
+          <div className="mt-5">
+            <AuthInput
+              id="reset-new-password"
+              label="New password"
+              name="newPassword"
+              type="password"
+              icon={Lock}
+              placeholder="At least 8 characters"
+              value={newPassword}
+              onChange={(event) => {
+                setNewPassword(event.target.value);
+                setErrors((previous) => ({ ...previous, newPassword: "" }));
+                setFormError("");
+              }}
+              error={errors.newPassword}
+              autoComplete="new-password"
+            />
+
+            <AuthInput
+              id="reset-confirm-password"
+              label="Confirm new password"
+              name="confirmPassword"
+              type="password"
+              icon={ShieldCheck}
+              placeholder="Type it again"
+              value={confirmPassword}
+              onChange={(event) => {
+                setConfirmPassword(event.target.value);
+                setErrors((previous) => ({ ...previous, confirmPassword: "" }));
+                setFormError("");
+              }}
+              error={errors.confirmPassword}
+              autoComplete="new-password"
+            />
+          </div>
+
+          <button type="submit" disabled={isBusy} className={primaryButton}>
+            {isBusy ? (
+              <>
+                <RefreshCw size={18} className="animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Reset password"
+            )}
+          </button>
+
+          <div className="mt-6 border-t border-[color:var(--wa-border)] pt-5 text-center text-[12.5px] leading-5 text-[color:var(--wa-text-secondary)]">
+            <p className="mb-1.5">Didn&apos;t get the email? Check your spam folder.</p>
+
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={cooldown > 0 || isBusy}
+              className="text-[13.5px] font-semibold text-[color:var(--wa-accent)] hover:text-[color:var(--wa-accent-hover)] hover:underline underline-offset-4 disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50"
+            >
+              {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code"}
+            </button>
+
+            <span className="mx-2">·</span>
+
+            <button
+              type="button"
+              onClick={() => {
+                setStep("email");
+                setOtp("");
+                setErrors({});
+                setFormError("");
+                setNotice("");
+              }}
+              className="text-[13.5px] font-semibold text-[color:var(--wa-accent)] hover:text-[color:var(--wa-accent-hover)] hover:underline underline-offset-4"
+            >
+              Use a different email
+            </button>
+          </div>
+        </form>
+      )}
+
+      <p className="mt-7 border-t border-[color:var(--wa-border)] pt-5 text-center text-[14px]">
+        <Link to="/login" className={`${linkClass} inline-flex items-center gap-1.5`}>
+          <ArrowLeft size={15} />
+          Back to log in
+        </Link>
+      </p>
+    </AuthLayout>
   );
 }

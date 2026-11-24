@@ -75,7 +75,7 @@ export default function SidebarHeader({
   return (
        <header className="flex h-[calc(56px+env(safe-area-inset-top))] shrink-0 select-none items-center justify-between px-4 pt-[env(safe-area-inset-top)] sm:h-[65px] sm:px-5 sm:pt-0">
       <h1 className="text-[24px] font-bold leading-none tracking-[-0.02em] text-[color:var(--wa-title)] sm:text-[22px]">
-        WhatsApp
+        HexaChat
       </h1>
 
       <div className="flex items-center gap-2">

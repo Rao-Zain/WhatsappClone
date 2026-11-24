@@ -28,8 +28,8 @@ export default defineConfig({
       },
       manifest: {
         id: '/',
-        name: 'WhatsApp Clone',
-        short_name: 'WhatsApp Clone',
+        name: 'HexaChat',
+        short_name: 'HexaChat',
         description: 'Real-time chat, calls and status updates.',
         lang: 'en',
         start_url: '/app',

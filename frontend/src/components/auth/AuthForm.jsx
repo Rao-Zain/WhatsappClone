@@ -1,7 +1,8 @@
-
-import { ChevronRight, Info, LockKeyhole } from "lucide-react";
-import AuthInput from "./AuthInput";
+import { ArrowRight, Lock, Mail, Phone, RefreshCw, User } from "lucide-react";
 import { Link } from "react-router-dom";
+import AuthInput from "./AuthInput";
+import { primaryButtonClass } from "./authStyles";
+
 export default function AuthForm({
   mode,
   formData,
@@ -10,6 +11,7 @@ export default function AuthForm({
   onSubmit,
   stayLoggedIn,
   setStayLoggedIn,
+  isSubmitting = false,
 }) {
   const isSignup = mode === "signup";
 
@@ -19,11 +21,13 @@ export default function AuthForm({
         id="username"
         label="Username"
         name="username"
+        icon={User}
         placeholder="Enter your username"
         value={formData.username}
         onChange={onChange}
         error={errors.username}
         autoComplete="username"
+        disabled={isSubmitting}
       />
 
       {isSignup && (
@@ -33,11 +37,13 @@ export default function AuthForm({
             label="Email address"
             name="email"
             type="email"
+            icon={Mail}
             placeholder="you@example.com"
             value={formData.email}
             onChange={onChange}
             error={errors.email}
             autoComplete="email"
+            disabled={isSubmitting}
           />
 
           <AuthInput
@@ -45,11 +51,13 @@ export default function AuthForm({
             label="Phone number"
             name="phone"
             type="tel"
+            icon={Phone}
             placeholder="+92 300 1234567"
             value={formData.phone}
             onChange={onChange}
             error={errors.phone}
             autoComplete="tel"
+            disabled={isSubmitting}
           />
         </>
       )}
@@ -59,55 +67,58 @@ export default function AuthForm({
         label="Password"
         name="password"
         type="password"
-        placeholder={
-          isSignup ? "At least 8 characters" : "Enter your password"
-        }
+        icon={Lock}
+        placeholder={isSignup ? "At least 8 characters" : "Enter your password"}
         value={formData.password}
         onChange={onChange}
         error={errors.password}
         autoComplete={isSignup ? "new-password" : "current-password"}
-      />
-
-        {!isSignup && (
-          <div className="-mt-2 mb-3 text-right">
+        disabled={isSubmitting}
+        labelAction={
+          !isSignup && (
             <Link
               to="/forgot-password"
-              className="text-[12px] font-medium text-[#008f69] hover:underline"
+              className="text-[12.5px] font-semibold text-[color:var(--wa-accent)] transition hover:text-[color:var(--wa-accent-hover)] hover:underline underline-offset-4"
             >
               Forgot password?
             </Link>
-          </div>
-        )}
+          )
+        }
+      />
 
       {!isSignup && (
-        <label className="mb-5 flex cursor-pointer items-center gap-2 text-[12px]">
+        <label className="mb-6 mt-1 flex cursor-pointer select-none items-center gap-2.5 text-[13.5px] text-[color:var(--wa-text-strong)]">
           <input
             type="checkbox"
             checked={stayLoggedIn}
             onChange={(event) => setStayLoggedIn(event.target.checked)}
-            className="h-4 w-4 accent-[#00a884]"
+            className="h-[18px] w-[18px] rounded accent-[var(--wa-accent)]"
           />
-
-          Stay logged in on this browser
-
-          <Info size={13} className="text-[#667781]" />
+          Keep me signed in on this browser
         </label>
       )}
 
       <button
         type="submit"
-        className="mt-3 flex w-full items-center text-white justify-center gap-2 rounded-full border  bg-[#25d366] px-5 py-3 text-[14px] font-semibold transition hover:bg-[#20c45e] active:scale-[0.99]"
+        disabled={isSubmitting}
+        className={`${primaryButtonClass} ${isSignup ? "mt-2" : ""}`}
       >
-        {isSignup ? "Create account" : "Log in"}
-        <ChevronRight size={17} />
+        {isSubmitting ? (
+          <>
+            <RefreshCw size={18} className="animate-spin" />
+            {isSignup ? "Creating account..." : "Signing in..."}
+          </>
+        ) : (
+          <>
+            {isSignup ? "Create account" : "Log in"}
+            <ArrowRight size={18} />
+          </>
+        )}
       </button>
 
-      <p className="mt-3 text-center text-[11px] leading-5 text-[#667781]">
-        <LockKeyhole
-          size={12}
-          className="mr-1 inline-block align-[-2px]"
-        />
-        Secure account access
+      <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[12px] text-[color:var(--wa-text-secondary)]">
+        <Lock size={12} />
+        Secure sign-in
       </p>
     </form>
   );

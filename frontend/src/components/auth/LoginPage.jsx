@@ -2,9 +2,8 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import api from "../../../lib/api";
-import AuthHeader from "./AuthHeader";
-import DownloadBanner from "./DownloadBanner";
-import AuthInstructions from "./AuthInstructions";
+import AuthLayout, { AuthCardHeader } from "./AuthLayout";
+import AuthAlert from "./AuthAlert";
 import AuthForm from "./AuthForm";
 import AuthFooter from "./AuthFooter";
 import AuthLoading from "./AuthLoading";
@@ -111,82 +110,45 @@ export default function LoginPage() {
     return <AuthLoading onLogout={() => setIsLoading(false)} />;
   }
 
-  return (
-    <div className="relative h-full w-full overflow-y-auto bg-[#f0f2f5] font-sans text-[#111b21] antialiased">
-      {/* WhatsApp desktop top green banner */}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 hidden h-[222px] bg-[#00a884] lg:block"
-        aria-hidden="true"
+   return (
+    <AuthLayout>
+      <AuthCardHeader
+        title="Welcome back"
+        subtitle="Log in to pick up your conversations right where you left off."
       />
 
-      {/* Main page content wrapper */}
-      <div className="relative z-10 flex min-h-full flex-col">
-        <AuthHeader />
+      {signupSuccess && (
+        <AuthAlert kind="success">
+          Your account has been created successfully. Please log in.
+        </AuthAlert>
+      )}
 
-        <main className="mx-auto w-full max-w-[1020px] flex-1 px-4 py-4 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
-          {signupSuccess && (
-            <div
-              role="status"
-              className="mb-4 rounded-xl border border-[#b7e4c7] bg-[#d9fdd3] px-4 py-3 text-sm text-[#166534] shadow-xs"
-            >
-              Your account has been created successfully. Please log in.
-            </div>
-          )}
-            {passwordReset && (
-              <div
-                role="status"
-                className="mb-4 rounded-xl border border-[#b7e4c7] bg-[#d9fdd3] px-4 py-3 text-sm text-[#166534] shadow-xs"
-              >
-                Your password has been changed. Please log in with your new password.
-              </div>
-            )}
-          <DownloadBanner />
+      {passwordReset && (
+        <AuthAlert kind="success">
+          Your password has been changed. Please log in with your new password.
+        </AuthAlert>
+      )}
 
-          {/* Main Auth Card */}
-          <section className="mt-3 w-full rounded-2xl border border-[#e9edef] bg-white p-5 shadow-sm sm:rounded-3xl sm:p-8 sm:shadow-md lg:p-12">
-            <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[1fr_minmax(320px,380px)] lg:gap-12">
-              {/* Left Column: Instructions */}
-              <div className="border-b border-[#e9edef] pb-6 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-8">
-                <AuthInstructions mode="login" />
-              </div>
+      {formError && <AuthAlert kind="error">{formError}</AuthAlert>}
 
-              {/* Right Column: Form */}
-              <div className="w-full min-w-0">
-                {formError && (
-                  <div
-                    role="alert"
-                    className="mb-4 rounded-xl border border-red-200 bg-[#fde8e8] px-4 py-3 text-sm text-[#bc1c1c] shadow-xs"
-                  >
-                    {formError}
-                  </div>
-                )}
+      <AuthForm
+        mode="login"
+        formData={formData}
+        errors={errors}
+        onChange={handleChange}
+        onSubmit={handleSubmit}
+        stayLoggedIn={stayLoggedIn}
+        setStayLoggedIn={setStayLoggedIn}
+      />
 
-                <AuthForm
-                  mode="login"
-                  formData={formData}
-                  errors={errors}
-                  onChange={handleChange}
-                  onSubmit={handleSubmit}
-                  stayLoggedIn={stayLoggedIn}
-                  setStayLoggedIn={setStayLoggedIn}
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Footer */}
-          <div className="mt-6 w-full pb-8">
-            <AuthFooter
-              mode="login"
-              onSwitchMode={(mode) => {
-                if (mode === "signup") {
-                  navigate("/signup");
-                }
-              }}
-            />
-          </div>
-        </main>
-      </div>
-    </div>
+      <AuthFooter
+        mode="login"
+        onSwitchMode={(mode) => {
+          if (mode === "signup") {
+            navigate("/signup");
+          }
+        }}
+      />
+    </AuthLayout>
   );
 }

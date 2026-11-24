@@ -7,8 +7,8 @@ export default function GuestRoute() {
 
   if (authLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#fcf5eb]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#d9fdd3] border-t-[#25d366]" />
+           <div className="flex h-screen items-center justify-center bg-[var(--wa-auth-page-bg)]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[color:var(--wa-border)] border-t-[color:var(--wa-accent)]" />
       </div>
     );
   }

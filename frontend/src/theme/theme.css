@@ -218,6 +218,26 @@
   --wa-toast-bg: color-mix(in srgb, var(--c-text) 90%, transparent);
   --wa-toast-fg: var(--c-surface);
 
+    /* Auth pages (login, signup, forgot password) — HexaChat */
+  --wa-auth-page-bg: var(--c-app);
+  --wa-auth-card-bg: var(--c-surface);
+  --wa-auth-card-border: var(--c-border);
+  --wa-auth-hero-from: color-mix(in srgb, var(--c-brand) 40%, #03120c);
+  --wa-auth-hero-to: color-mix(in srgb, var(--c-brand) 80%, #03120c);
+  --wa-auth-hero-fg: #ffffff;
+  --wa-auth-hero-fg-soft: rgba(255, 255, 255, 0.78);
+  --wa-auth-hero-glass: rgba(255, 255, 255, 0.12);
+  --wa-auth-hero-glass-border: rgba(255, 255, 255, 0.22);
+  --wa-auth-hero-pattern: rgba(255, 255, 255, 0.07);
+  --wa-auth-input-bg: var(--c-surface-alt);
+  --wa-auth-input-border: var(--c-border-strong);
+  --wa-auth-ring: color-mix(in srgb, var(--c-brand) 24%, transparent);
+  --wa-auth-btn-bg: color-mix(in srgb, var(--c-brand) 90%, #000000);
+  --wa-auth-btn-hover: color-mix(in srgb, var(--c-brand) 76%, #000000);
+  --wa-auth-btn-shadow: color-mix(in srgb, var(--c-brand) 38%, transparent);
+  --wa-auth-error-bg: color-mix(in srgb, var(--c-danger) 10%, var(--c-surface));
+  --wa-auth-error-border: color-mix(in srgb, var(--c-danger) 35%, transparent);
+
   /* Empty state ("Download WhatsApp") */
   --wa-empty-bg: var(--c-app);
   --wa-empty-title: var(--c-text-strong);
