@@ -9,7 +9,7 @@ import { getBlockedMessage, getBlockStates } from "../utils/blocks.js";
 import { notifyNewMessage } from "../utils/push.js";
 import fs from "fs";
 import path from "path";
-
+import { isGridKey, streamFile, hasFile, discardUpload } from "../utils/gridStore.js";
 
 // POST /api/conversations
 export async function createConversation(req, res) {
@@ -884,10 +884,8 @@ export async function uploadMessage(req, res) {
 
     if (blockedMessage) {
       // The files were already saved by multer; remove them.
-      await Promise.all(
-        uploadedFiles.map((file) =>
-          fs.promises.unlink(file.path).catch(() => {})
-        )
+           await Promise.all(
+        uploadedFiles.map((file) => discardUpload(file))
       );
 
       return res.status(403).json({
@@ -912,7 +910,7 @@ export async function uploadMessage(req, res) {
         originalName: file.originalname,
         mimeType: file.mimetype,
         size: file.size,
-        storageKey: file.filename,
+        storageKey: file.storageKey || file.filename,
       })),
       status: hasOnlineRecipient(io, conversation, req.user._id)
         ? "delivered"
@@ -951,13 +949,10 @@ export async function uploadMessage(req, res) {
     });
   } catch (error) {
     // Remove files if saving the message failed.
-    await Promise.all(
-      uploadedFiles.map((file) =>
-        fs.promises
-          .unlink(file.path)
-          .catch(() => {})
-      )
+        await Promise.all(
+      uploadedFiles.map((file) => discardUpload(file))
     );
+    
 
     console.error("Upload message error:", error);
 
@@ -1021,6 +1016,21 @@ export async function downloadAttachment(req, res) {
     }
 
     const attachment = message.attachments[index];
+    if (isGridKey(attachment.storageKey)) {
+  if (!(await hasFile(attachment.storageKey))) {
+    return res.status(404).json({ success: false, message: "File is missing from storage." });
+  }
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Type", attachment.mimeType);
+  res.setHeader("Content-Length", attachment.size);
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename*=UTF-8''${encodeURIComponent(attachment.originalName)}`
+  );
+  return streamFile(attachment.storageKey)
+    .on("error", () => res.destroy())
+    .pipe(res);
+}
     const filePath = path.resolve(
       uploadDirectory,
       attachment.storageKey

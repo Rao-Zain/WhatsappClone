@@ -24,6 +24,7 @@ import {
 } from "../controllers/groupController.js";
 
 import upload from "../middleware/uploadMiddleware.js";
+import moveSmallImagesToDb from "../middleware/moveSmallImagesToDb.js";
 import { searchLimiter, messageLimiter } from "../middleware/rateLimiters.js";
 import {
    reactToMessage, toggleStarMessage, deleteMessage, forwardMessage, editMessage,
@@ -44,7 +45,9 @@ router.post(
   "/:conversationId/attachments",
     messageLimiter, // before multer, so a flood is refused before any file is saved
   upload.array("files", 10),
-  uploadMessage
+moveSmallImagesToDb,
+uploadMessage
+
 );
 
 router.get(

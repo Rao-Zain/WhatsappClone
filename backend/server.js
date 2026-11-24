@@ -82,6 +82,7 @@ app.use(
 );
 
 // API routes
+app.use("/api", apiLimiter);              // under app.use("/api/messages", messageRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/messages", messageRoutes);
@@ -90,7 +91,6 @@ app.use("/api/blocks", blockRoutes);
 app.use("/api/statuses", statusRoutes);
 app.use("/api/push", pushRoutes);
 app.use("/api/calls", callRoutes);    
-app.use("/api", apiLimiter);              // under app.use("/api/messages", messageRoutes);
 
 // Socket.IO
 const io = new Server(httpServer, {
