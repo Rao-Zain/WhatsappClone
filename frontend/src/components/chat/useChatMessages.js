@@ -51,6 +51,7 @@ export function formatMessage(message, currentUserId) {
     starred: Boolean(message.starred),
     deletedForEveryone: Boolean(message.deletedForEveryone),
     reactions: normalizeReactions(message.reactions),
+    call: message.call || null,
     replyTo: formatReply(message.replyTo, currentUserId),
   };
 }

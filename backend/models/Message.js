@@ -98,19 +98,7 @@ const messageSchema = new mongoose.Schema(
     type: {
       type: String,
       enum: [
-        "text",
-        "image",
-        "video",
-        "audio",
-        "voice",
-        "document",
-        "file",
-        "sticker",
-        "contact",
-        "location",
-        "poll",
-        "event",
-        "system",
+        "text", "image", "video", "audio", "voice", "document", "file", "sticker", "contact", "location", "poll", "event", "system", "call",
       ],
       default: "text",
       required: true,
@@ -140,7 +128,14 @@ const messageSchema = new mongoose.Schema(
       default: false,
     },
 
-    
+    // Only for type "call": what happened on the call.
+call: {
+  callType: { type: String, enum: ["audio", "video"] },
+  answered: { type: Boolean, default: false },
+  endReason: { type: String, default: null },
+  durationSeconds: { type: Number, default: 0 },
+},
+
     // Set when the sender edits the text. null = never edited.
     editedAt: {
       type: Date,

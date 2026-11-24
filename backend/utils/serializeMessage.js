@@ -71,6 +71,7 @@ export function serializeMessage(message, viewerId = null) {
           userId: String(r.user),
           emoji: r.emoji,
         })),
+        call: m.type === "call" ? m.call || null : null,
     replyTo: deleted ? null : serializeReply(m.replyTo),
     attachments: deleted
       ? []
@@ -91,7 +92,7 @@ export async function resolveReplyTarget(replyTo, conversationId) {
  const target = await Message.findOne({
     _id: replyTo,
     conversation: conversationId,
-    type: { $ne: "system" },
+    type: {  $nin: ["system", "call"] },
   }).select("_id");
 
   return target ? target._id : null;

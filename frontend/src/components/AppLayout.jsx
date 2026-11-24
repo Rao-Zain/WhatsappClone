@@ -75,6 +75,10 @@ function formatTime(date) {
 
 // Text shown under a chat name. In groups, incoming messages get the sender's name.
 function getPreview(isGroup, message, isOwnMessage, fallback) {
+  if (message.type === "call") {
+  const k = message.call?.callType === "video" ? "video" : "voice";
+  return message.call?.answered ? `📞 ${k} call` : isOwnMessage ? `📞 ${k} call` : `Missed ${k} call`;
+}
   if (!message.text) return fallback;
     if (message.type === "system") return message.text;
   if (!isGroup || isOwnMessage) return message.text;
@@ -121,6 +125,8 @@ function formatConversation(conversation, currentUserId) {
      message: lastMessage?.deletedForEveryone
       ? "This message was deleted"
       : lastMessage?.type === "system"
+      ? lastMessage.text
+      : lastMessage?.type === "call"
         ? lastMessage.text
         : lastMessage?.text
           ? isGroup && senderId && String(senderId) !== String(currentUserId)
@@ -470,7 +476,7 @@ const getUserAvatar = (userId) =>
       const isSelectedConversation =
                view === "chats" && String(openChatId) === conversationId;
 
-      if (!isOwnMessage && message.type !== "system") {
+      if (!isOwnMessage && message.type !== "system" && message.type !== "call") {
         const active = isAppActive();
 
         // Play a sound unless the user is already reading this chat

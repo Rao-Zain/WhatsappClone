@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useLayoutEffect, useState } from "react";
 import MessageRow from "./MessageRow";
-
+import CallMessage from "./CallMessage";
 export default function MessageList({
   messages,
   currentUserId,
@@ -149,7 +149,13 @@ export default function MessageList({
      
         {messages.map((message, index) => {
           const previous = messages[index - 1];
-
+if (message.type === "call") {
+  return (
+    <div key={message.id} className={index === 0 ? "" : "mt-3"}>
+      <CallMessage message={message} />
+    </div>
+  );
+}
           // Group notices such as "Ali added Sara" sit in the middle as a small pill.
           if (message.type === "system") {
             return (
@@ -167,7 +173,7 @@ export default function MessageList({
           // Same sender as the message above: tight spacing and no bubble tail.
           const grouped =
             Boolean(previous) &&
-            previous.type !== "system" &&
+            previous.type !== "system" && previous.type !== "call" &&
             (previous.senderId && message.senderId
               ? previous.senderId === message.senderId
               : previous.sender === message.sender);

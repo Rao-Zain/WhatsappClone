@@ -80,7 +80,7 @@ async function loadMessageContext(req, res) {
   }
 
     // Group notices ("Ali added Sara") can't be reacted to, starred, forwarded or deleted.
-  if (message.type === "system") {
+  if (message.type === "system" || message.type === "call") {
     fail(res, 400, "This action isn't available for group notifications.");
     return null;
   }

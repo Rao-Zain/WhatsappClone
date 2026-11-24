@@ -238,7 +238,20 @@ export default function ChatWindow({
     setIsDeleting(true);
     try {
       await api.delete(`/conversations/${chatId}/messages/${deletingMessage.id}`, { params: { scope } });
-      setMessages((prev) => prev.filter((m) => m.id !== deletingMessage.id));
+      if (scope === "everyone") {
+  updateMessage(deletingMessage.id, (m) => ({
+    ...m,
+    text: "",
+    attachments: [],
+    reactions: [],
+    forwarded: false,
+    starred: false,
+    replyTo: null,
+    deletedForEveryone: true,
+  }));
+} else {
+  setMessages((prev) => prev.filter((m) => m.id !== deletingMessage.id));
+}
       setDeletingMessage(null);
     } catch (err) {
       showNotice(err.response?.data?.message || "Failed to delete message");

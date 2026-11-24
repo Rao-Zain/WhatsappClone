@@ -4,6 +4,8 @@ import Call from "../models/Call.js";
 import { CALL_POPULATE, serializeCall } from "../controllers/callController.js";
 import { getBlockedMessage } from "../utils/blocks.js";
 import { createSocketLimiter } from "../utils/socketRateLimit.js";
+import Message from "../models/Message.js";
+import { serializeMessage } from "../utils/serializeMessage.js";
 
 const RING_TIMEOUT_MS = 45_000;
 const MAX_PARTICIPANTS = 6; // mesh limit
@@ -49,6 +51,36 @@ async function logCallEnded(io, call, reason) {
         ).populate(CALL_POPULATE);
 
         if (!log) return;
+        // Leave a call entry in the chat, like WhatsApp.
+try {
+    const msg = await Message.create({
+        conversation: call.conversationId,
+        sender: call.initiator,
+        type: "call",
+        text: "",
+        status: "read",
+        readBy: [...call.members],
+        call: {
+            callType: call.type,
+            answered: Boolean(call.answeredAt),
+            endReason: reason,
+            durationSeconds,
+        },
+    });
+    await Conversation.updateOne(
+        { _id: call.conversationId },
+        { lastMessage: msg._id }
+    );
+    const populated = await Message.findById(msg._id).populate(
+        "sender", "username name profilePicture"
+    );
+    const payload = serializeMessage(populated);
+    call.members.forEach((memberId) =>
+        io.to(personalRoom(memberId)).emit("message:new", payload)
+    );
+} catch (chatErr) {
+    console.error("Could not add the call to the chat", chatErr);
+}
 
         call.members.forEach((memberId) => {
             io.to(personalRoom(memberId)).emit("calls:new", {
